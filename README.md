@@ -12,7 +12,8 @@ The project is intentionally offline-first. It uses deterministic scoring, stand
 - Detect infrastructure alignment across cloud platform systems, GPU/AI infrastructure, orchestration, APIs, reliability, and SRE collaboration.
 - Store job records, scores, status, notes, contacts, and generated tailoring snapshots in SQLite.
 - Compare a resume against job requirements and rank tracked jobs by combined role score plus resume match score.
-- Generate tailored resume bullets, keyword lists, positioning guidance, gap analysis, and finished DOCX resumes.
+- Generate tailored resume bullets, keyword lists, positioning guidance, gap analysis, project selections, and finished DOCX resumes.
+- Prefer production-grade framing for platform and release-operations work, including AI-assisted triage systems with explicit human approval boundaries.
 - Provide a dependency-free local dashboard for ingestion, scoring, tracking, matching, tailoring, status updates, and CSV export.
 
 ## Setup
@@ -132,6 +133,12 @@ Export finished DOCX resumes for matched postings:
 python3 -m rolefit_platform export-resumes --output-dir generated_resumes --limit 25
 ```
 
+Run tests:
+
+```bash
+python3 -m unittest discover -s tests
+```
+
 Export tracker data:
 
 ```bash
@@ -181,9 +188,21 @@ rolefit_platform/
   web.py            dependency-free local browser UI
 examples/
   cloud_platform_job.txt
+tests/
+  test_resume_tailoring.py
 launch.command      macOS double-click launcher
 ```
 
 ## Portfolio Notes
 
 This is a backend/platform project, not a marketing site. The technical emphasis is deterministic ranking, ATS ingestion, SQLite-backed workflow state, local-first tooling, modular scoring logic, and document generation automation.
+
+## Maintainer Notes
+
+This repository is the public-safe portfolio edition. Private deployment targets, employer-specific naming, personal contact data, and active-search framing should stay out of this codebase. When syncing changes from a private working repo, port implementation behavior and tests, then re-run:
+
+```bash
+python3 -m compileall rolefit_platform
+python3 -m unittest discover -s tests
+rg -n "PRIVATE_COMPANY|PRIVATE_NAME|PRIVATE_EMAIL|PRIVATE_PATH|active-search-framing" .
+```

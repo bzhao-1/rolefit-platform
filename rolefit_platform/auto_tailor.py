@@ -26,6 +26,7 @@ def build_tailored_resume(job, resume_text=None, resume_source=None):
         "readiness": match["readiness"],
         "position_as": tailored["position_as"],
         "rewritten_bullets": tailored["rewritten_bullets"],
+        "projects": tailored.get("projects") or [],
         "keywords_to_inject": tailored["keywords_to_inject"],
         "experience_to_emphasize": tailored.get("experience_to_emphasize") or [],
         "gaps_in_fit": tailored["gaps_in_fit"],

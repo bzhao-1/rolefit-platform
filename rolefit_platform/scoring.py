@@ -30,6 +30,7 @@ CATEGORIES = [
     ("infrastructure cloud platform work", 10, [
         "gpu", "accelerated computing", "ai infrastructure", "ml infrastructure", "cluster",
         "kubernetes", "provisioning", "infrastructure lifecycle", "cloud platform", "apis",
+        "genai", "ai-assisted", "copilot", "release triage", "deterministic guardrails",
     ]),
     ("real SWE signal", 10, [
         "software engineer", "software development", "design", "build", "coding", "systems",
