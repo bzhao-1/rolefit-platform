@@ -30,6 +30,7 @@ create table if not exists tailored_resumes (
     readiness text,
     position_as text,
     rewritten_bullets text,
+    projects text,
     keywords_to_inject text,
     experience_to_emphasize text,
     gaps_in_fit text,
@@ -47,7 +48,15 @@ def connect(path):
     conn.row_factory = sqlite3.Row
     conn.execute(JOBS_SCHEMA)
     conn.execute(TAILORING_SCHEMA)
+    ensure_column(conn, "tailored_resumes", "projects", "text")
     return conn
+
+
+def ensure_column(conn, table, column, definition):
+    columns = [row["name"] for row in conn.execute("pragma table_info(" + table + ")").fetchall()]
+    if column not in columns:
+        conn.execute("alter table " + table + " add column " + column + " " + definition)
+        conn.commit()
 
 
 def add_job(db_path, job):
@@ -104,15 +113,16 @@ def save_tailored_resume(db_path, job_id, tailoring):
     conn.execute(
         """
         insert into tailored_resumes
-        (job_id, resume_source, resume_match_score, readiness, position_as, rewritten_bullets,
+        (job_id, resume_source, resume_match_score, readiness, position_as, rewritten_bullets, projects,
          keywords_to_inject, experience_to_emphasize, gaps_in_fit, covered_keywords, missing_keywords)
-        values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         on conflict(job_id) do update set
             resume_source = excluded.resume_source,
             resume_match_score = excluded.resume_match_score,
             readiness = excluded.readiness,
             position_as = excluded.position_as,
             rewritten_bullets = excluded.rewritten_bullets,
+            projects = excluded.projects,
             keywords_to_inject = excluded.keywords_to_inject,
             experience_to_emphasize = excluded.experience_to_emphasize,
             gaps_in_fit = excluded.gaps_in_fit,
@@ -127,6 +137,7 @@ def save_tailored_resume(db_path, job_id, tailoring):
             tailoring.get("readiness"),
             tailoring.get("position_as"),
             json.dumps(tailoring.get("rewritten_bullets") or []),
+            json.dumps(tailoring.get("projects") or []),
             json.dumps(tailoring.get("keywords_to_inject") or []),
             json.dumps(tailoring.get("experience_to_emphasize") or []),
             json.dumps(tailoring.get("gaps_in_fit") or []),
@@ -145,7 +156,7 @@ def get_tailored_resume(db_path, job_id):
     if not row:
         return None
     data = dict(row)
-    for key in ["rewritten_bullets", "keywords_to_inject", "experience_to_emphasize", "gaps_in_fit", "covered_keywords", "missing_keywords"]:
+    for key in ["rewritten_bullets", "projects", "keywords_to_inject", "experience_to_emphasize", "gaps_in_fit", "covered_keywords", "missing_keywords"]:
         try:
             data[key] = json.loads(data.get(key) or "[]")
         except json.JSONDecodeError:

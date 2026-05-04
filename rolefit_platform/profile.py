@@ -71,6 +71,11 @@ TARGET_PROFILE = {
         "compliance tooling",
         "data pipelines",
         "observability",
+        "AI-assisted release operations",
+        "release triage",
+        "release operations",
+        "deterministic guardrails",
+        "human-in-the-loop production automation",
     ],
 }
 
@@ -85,8 +90,9 @@ Testing & Automation: PyTest, CI/CD, Canary Testing
 Data & Observability: Metric pipelines, Alerting, MQL, PostgreSQL
 
 Cloud Infrastructure Platform, Software Engineer, Austin, TX, 2025 - Present
+- Built an AI-assisted release-operations system for cloud infrastructure rollouts that centralizes release orchestration state, pipeline data, regional capacity health, known failure memory, and human-reviewed remediation guidance.
 - Owned hypervisor image validation testing for the OL9 migration, validating image readiness and mitigating rollout risk during the transition from OL8.
-- Rebuilt and delivered Check-in Gate as a Service (CIGaaS), enabling functional test execution for multiple internal repositories against a stable 200+ test golden suite.
+- Rebuilt and delivered Check-in Gate as a Service (CIGaaS), enabling functional test execution for multiple service repositories against a stable 200+ test golden suite.
 - Built an end-to-end production security data pipeline ingesting, normalizing, correlating, and visualizing fleet-wide hypervisor vulnerability signals across 10k+ hypervisors and 100k+ VMs per month, with reporting used by security and leadership teams.
 - Automated triage and remediation workflows for hundreds of security tickets per month, reducing manual investigation time and enabling fleet-wide pattern analysis.
 - Designed and implemented a long-running VM testing stage that operates on already-running VMs, expanding coverage beyond launch-based validation.

@@ -39,6 +39,8 @@ def likely_job_requirements(job_text):
         "grpc", "rest", "microservices", "prometheus", "grafana", "kafka", "flink",
         "spark", "clickhouse", "postgres", "aws", "gcp", "azure", "gpu",
         "ai infrastructure", "ml infrastructure", "control plane", "data plane",
+        "genai", "ai-assisted", "copilot", "release triage", "devops",
+        "deterministic guardrails", "human in the loop", "developer productivity",
     ]
     candidates.extend(extra)
     found = count_matches(job_text, candidates)
@@ -125,7 +127,9 @@ def top_resume_matches(db_path, resume_text=None, limit=5):
             "missing_keywords": match["missing_keywords"],
             "position_as": tailored["position_as"],
             "rewritten_bullets": tailored["rewritten_bullets"],
+            "projects": tailored.get("projects") or [],
             "keywords_to_inject": tailored["keywords_to_inject"],
+            "experience_to_emphasize": tailored.get("experience_to_emphasize") or [],
             "gaps_in_fit": tailored["gaps_in_fit"],
         })
     ranked.sort(key=lambda item: (item["combined_priority_score"], item["role_score"] or 0), reverse=True)

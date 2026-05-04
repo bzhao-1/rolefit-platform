@@ -23,7 +23,7 @@ def esc(value):
 
 
 def status_options(current):
-    statuses = ["saved", "pulled", "review requested", "applied", "interview", "offer", "rejected", "skipped"]
+    statuses = ["saved", "pulled", "referral requested", "review requested", "applied", "interview", "offer", "rejected", "skipped"]
     current_value = current or "saved"
     parts = []
     for status in statuses:
@@ -238,7 +238,7 @@ class App(BaseHTTPRequestHandler):
   </div>
   <div class="panel">
     <h2>Custom Sources</h2>
-    <p class="muted">Add guarded career sites or internal source links in <code>sources.py</code>, then paste selected posting URLs back into the dashboard.</p>
+    <p class="muted">Add guarded career sites or curated source links in <code>sources.py</code>, then paste selected posting URLs back into the dashboard.</p>
 """ + "".join("<p><a href='" + esc(url) + "' target='_blank'>" + esc(company) + "</a></p>" for company, url in SAVED_SEARCH_LINKS) + """
   </div>
 </aside>
@@ -347,6 +347,8 @@ class App(BaseHTTPRequestHandler):
   <p><b>Missing:</b> """ + esc(", ".join(row["missing_keywords"][:12])) + """</p>
   <h3>Auto-Tailored Bullets</h3>
   <ul>""" + "".join("<li>" + esc(item) + "</li>" for item in row["rewritten_bullets"][:5]) + """</ul>
+  <h3>Default Projects</h3>
+  <p>""" + esc(", ".join(project["name"] for project in row.get("projects") or [])) + """</p>
 </article>""")
         body = tailored_notice + """
 <div class="panel">
@@ -404,6 +406,7 @@ class App(BaseHTTPRequestHandler):
     <p><b>Position as:</b> """ + esc(tailored["position_as"]) + """</p>
     <p><b>Keywords:</b> """ + esc(", ".join(tailored["keywords_to_inject"])) + """</p>
     <p><b>Emphasize:</b> """ + esc(", ".join(tailored.get("experience_to_emphasize") or [])) + """</p>
+    <p><b>Projects:</b> """ + esc(", ".join(project["name"] for project in tailored.get("projects") or [])) + """</p>
   </div>
   <div class="panel">
     <h2>Interview Prep</h2>

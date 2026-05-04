@@ -20,6 +20,13 @@ def xml_text(value):
     return escape(str(value or ""))
 
 
+def clean_bullet_text(value):
+    text = str(value or "").strip()
+    while text.endswith("."):
+        text = text[:-1].rstrip()
+    return text
+
+
 def run_xml(text="", bold=False, italic=False, size=None):
     props = []
     if bold:
@@ -37,6 +44,8 @@ def tab_run():
 
 
 def paragraph(text="", style=None, bullet=False, bold=False, italic=False, size=None, align=None, border=False, spacing_after=0, spacing_before=0):
+    if bullet:
+        text = clean_bullet_text(text)
     return paragraph_runs([{"text": text, "bold": bold, "italic": italic, "size": size}], style, bullet, align, border, spacing_after=spacing_after, spacing_before=spacing_before)
 
 
@@ -122,6 +131,10 @@ def document_xml(job, tailoring):
     role = job.get("role") or "Software Engineer"
     company = job.get("company") or "Target Company"
     bullets = tailoring.get("rewritten_bullets") or []
+    projects = tailoring.get("projects") or []
+    if not projects:
+        from rolefit_platform.resume import tailored_projects
+        projects = tailored_projects(" ".join([role, company, job.get("description") or ""]))
 
     parts = []
     parts.append(paragraph("Sample Candidate", bold=True, size=18, align="center", spacing_after=0))
@@ -153,13 +166,12 @@ def document_xml(job, tailoring):
     parts.append(paragraph("Supported coursework on pipelining, cache design, and low-level performance reasoning", bullet=True, size=10, spacing_after=80))
 
     parts.append(section_heading("PROJECTS"))
-    parts.append(project_line("Computer Vision For Autonomous Driving", "Undergraduate Thesis", "Sep 2024 - Mar 2025"))
-    parts.append(paragraph("Generated 1M+ multimodal simulation samples using CARLA with custom weather, vehicle density, and sensor configurations", bullet=True, size=10, spacing_after=0))
-    parts.append(paragraph("Trained and evaluated HRNetV2 semantic segmentation models under domain shift conditions", bullet=True, size=10, spacing_after=0))
-    parts.append(paragraph("Improved robustness using domain adaptation, recovering up to 95% mIoU, and reduced fog-induced performance drops by ~35%", bullet=True, size=10, spacing_after=80))
-    parts.append(project_line("Scheme Interpreter", "Personal Project", "Dec 2023"))
-    parts.append(paragraph("Built a complete interpreter supporting primitives and continuations", bullet=True, size=10, spacing_after=0))
-    parts.append(paragraph("Reinforced compiler, runtime, and systems-level design fundamentals", bullet=True, size=10, spacing_after=80))
+    for project in projects[:3]:
+        parts.append(project_line(project.get("name"), project.get("label"), project.get("date")))
+        project_bullets = project.get("bullets") or []
+        for index, item in enumerate(project_bullets):
+            spacing = 80 if index == len(project_bullets) - 1 else 0
+            parts.append(paragraph(item, bullet=True, size=10, spacing_after=spacing))
 
     parts.append(section_heading("EDUCATION"))
     parts.append(education_line("Graduate Computer Science Program", "In progress"))
@@ -257,9 +269,7 @@ def export_finished_resumes(db_path, output_dir=DEFAULT_OUTPUT_DIR, limit=25):
     os.makedirs(output_dir, exist_ok=True)
     exported = []
     for job in rows:
-        tailoring = get_tailored_resume(db_path, job["id"])
-        if not tailoring:
-            tailoring = auto_tailor_job(db_path, job["id"])
+        tailoring = auto_tailor_job(db_path, job["id"]) or get_tailored_resume(db_path, job["id"])
         filename = clean_filename(str(job["id"]) + "_" + (job.get("company") or "") + "_" + (job.get("role") or "")) + ".docx"
         path = os.path.join(output_dir, filename)
         write_docx(path, job, tailoring)

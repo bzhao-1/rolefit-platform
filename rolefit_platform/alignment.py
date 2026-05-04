@@ -3,11 +3,11 @@ from rolefit_platform.text_utils import count_matches
 
 INFRASTRUCTURE_SIGNALS = {
     "cloud platform systems": ["cloud platform", "control plane", "data plane", "compute", "storage", "networking", "infrastructure lifecycle"],
-    "AI infrastructure / GPU infra": ["gpu", "ai infrastructure", "ml infrastructure", "accelerated computing", "training", "inference", "cluster"],
+    "AI infrastructure / GPU infra": ["gpu", "ai infrastructure", "ml infrastructure", "accelerated computing", "training", "inference", "cluster", "genai", "ai-assisted", "copilot"],
     "distributed systems at scale": ["distributed systems", "scale", "multi-tenant", "high availability", "fault tolerant", "scheduler", "fleet"],
     "Kubernetes / orchestration": ["kubernetes", "k8s", "orchestration", "containers", "docker", "helm"],
     "APIs for infrastructure automation": ["api", "grpc", "rest", "automation", "provisioning", "terraform", "iac"],
-    "SRE + dev collaboration": ["sre", "reliability", "observability", "monitoring", "incident", "deployment", "ci/cd"],
+    "SRE + dev collaboration": ["sre", "reliability", "observability", "monitoring", "incident", "deployment", "ci/cd", "release triage", "devops", "human in the loop", "deterministic guardrails"],
 }
 
 
