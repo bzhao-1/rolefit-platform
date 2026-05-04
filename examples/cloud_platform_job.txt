@@ -1,0 +1,5 @@
+Example Cloud Co. is seeking a Software Engineer II for Cloud Platform Infrastructure.
+You will build Python and Java services, APIs, and Kubernetes-based automation for GPU cloud lifecycle management.
+The team owns distributed systems for provisioning, validation, monitoring, deployment pipelines, and reliability at fleet scale.
+Candidates should have 1+ years of backend software engineering experience, strong Linux fundamentals, CI/CD experience, and interest in AI infrastructure.
+Work includes collaborating with SRE and product teams to improve observability, release safety, and infrastructure automation.
