@@ -217,6 +217,7 @@ PROJECT_BANK = [
         "bullets": [
             "Built a local Python system for ATS job-feed ingestion, deterministic role scoring, SQLite-backed tracking, and browser-based workflow automation",
             "Implemented resume matching and tailoring pipelines that rank postings by role fit, surface covered/missing keywords, and export formatted DOCX resumes",
+            "Added US/remote eligibility filtering, ATS deduplication, status workflows, and one-click export paths to move postings from ingestion to review without spreadsheet handoffs",
         ],
     },
     {
@@ -246,6 +247,7 @@ PROJECT_BANK = [
         "bullets": [
             "Built a complete interpreter supporting primitives and continuations",
             "Reinforced compiler, runtime, and systems-level design fundamentals",
+            "Implemented parser and evaluator flows for Scheme expressions, strengthening recursive evaluation, environment modeling, and interpreter debugging practice",
         ],
     },
 ]
