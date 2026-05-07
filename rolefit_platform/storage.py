@@ -43,11 +43,33 @@ create table if not exists tailored_resumes (
 """
 
 
+INTERVIEWS_SCHEMA = """
+create table if not exists interviews (
+    id integer primary key autoincrement,
+    job_id integer,
+    company text,
+    role text,
+    stage text,
+    scheduled_at text,
+    timezone text,
+    format text,
+    contact text,
+    status text default 'scheduled',
+    prep_focus text,
+    notes text,
+    created_at text default current_timestamp,
+    updated_at text default current_timestamp,
+    foreign key(job_id) references jobs(id)
+);
+"""
+
+
 def connect(path):
     conn = sqlite3.connect(path)
     conn.row_factory = sqlite3.Row
     conn.execute(JOBS_SCHEMA)
     conn.execute(TAILORING_SCHEMA)
+    conn.execute(INTERVIEWS_SCHEMA)
     ensure_column(conn, "tailored_resumes", "projects", "text")
     return conn
 
@@ -212,10 +234,12 @@ def stats(db_path):
     rows = conn.execute("select status, count(*) as count from jobs group by status").fetchall()
     total = conn.execute("select count(*) as count from jobs where status != 'skipped'").fetchone()["count"]
     top = conn.execute("select count(*) as count from jobs where score >= 75 and status != 'skipped'").fetchone()["count"]
+    scheduled = conn.execute("select count(*) as count from interviews where status = 'scheduled'").fetchone()["count"]
     conn.close()
     return {
         "total": total,
         "top_fit": top,
+        "scheduled_interviews": scheduled,
         "by_status": {row["status"]: row["count"] for row in rows},
     }
 
@@ -240,6 +264,104 @@ def update_status(db_path, job_id, status, notes=None, contact=None):
     conn.commit()
     conn.close()
     return True
+
+
+def add_interview(db_path, interview):
+    conn = connect(db_path)
+    job_id = interview.get("job_id")
+    job = get_job(db_path, job_id) if job_id else None
+    company = interview.get("company") or (job or {}).get("company")
+    role = interview.get("role") or (job or {}).get("role")
+    cur = conn.execute(
+        """
+        insert into interviews
+        (job_id, company, role, stage, scheduled_at, timezone, format, contact, status, prep_focus, notes)
+        values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            job_id,
+            company,
+            role,
+            interview.get("stage"),
+            interview.get("scheduled_at"),
+            interview.get("timezone"),
+            interview.get("format"),
+            interview.get("contact"),
+            interview.get("status", "scheduled"),
+            interview.get("prep_focus"),
+            interview.get("notes"),
+        ),
+    )
+    if job_id:
+        conn.execute(
+            "update jobs set status = 'interview', updated_at = current_timestamp where id = ?",
+            (job_id,),
+        )
+    conn.commit()
+    interview_id = cur.lastrowid
+    conn.close()
+    return interview_id
+
+
+def list_interviews(db_path, limit=25, status=None):
+    conn = connect(db_path)
+    if status:
+        rows = conn.execute(
+            """
+            select interviews.*, jobs.link
+            from interviews
+            left join jobs on jobs.id = interviews.job_id
+            where interviews.status = ?
+            order by interviews.scheduled_at asc, interviews.created_at desc
+            limit ?
+            """,
+            (status, limit),
+        ).fetchall()
+    else:
+        rows = conn.execute(
+            """
+            select interviews.*, jobs.link
+            from interviews
+            left join jobs on jobs.id = interviews.job_id
+            order by
+                case when interviews.status in ('completed', 'cancelled') then 1 else 0 end,
+                interviews.scheduled_at asc,
+                interviews.created_at desc
+            limit ?
+            """,
+            (limit,),
+        ).fetchall()
+    conn.close()
+    return [dict(row) for row in rows]
+
+
+def get_interview(db_path, interview_id):
+    conn = connect(db_path)
+    row = conn.execute("select * from interviews where id = ?", (interview_id,)).fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+
+def update_interview(db_path, interview_id, **fields):
+    allowed = ["stage", "scheduled_at", "timezone", "format", "contact", "status", "prep_focus", "notes"]
+    updates = []
+    values = []
+    for key in allowed:
+        if key in fields and fields[key] is not None:
+            updates.append(key + " = ?")
+            values.append(fields[key])
+    if not updates:
+        return bool(get_interview(db_path, interview_id))
+    values.append(interview_id)
+    conn = connect(db_path)
+    cur = conn.execute(
+        "update interviews set " + ", ".join(updates) + ", updated_at = current_timestamp where id = ?",
+        values,
+    )
+    conn.commit()
+    ok = cur.rowcount > 0
+    conn.close()
+    return ok
 
 
 def export_jobs(db_path, output_path):

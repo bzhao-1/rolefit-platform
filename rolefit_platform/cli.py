@@ -13,7 +13,7 @@ from rolefit_platform.resume_export import DEFAULT_OUTPUT_DIR, export_finished_r
 from rolefit_platform.resume_match import load_resume_text, resume_match, top_resume_matches
 from rolefit_platform.scoring import score_job
 from rolefit_platform.sources import pull_defaults, pull_greenhouse, pull_lever
-from rolefit_platform.storage import add_job, export_jobs, get_job, list_top, update_status
+from rolefit_platform.storage import add_interview, add_job, export_jobs, get_job, list_interviews, list_top, update_interview, update_status
 from rolefit_platform.text_utils import load_job_text
 from rolefit_platform.web import serve
 
@@ -117,6 +117,48 @@ def command_generate_review(args):
 def command_prep_interview(args):
     text, job = resolve_text(args)
     print_json(interview_prep(text))
+
+
+def command_add_interview(args):
+    ensure_db_dir(args.db)
+    interview_id = add_interview(args.db, {
+        "job_id": args.job_id,
+        "company": args.company,
+        "role": args.role,
+        "stage": args.stage,
+        "scheduled_at": args.scheduled_at,
+        "timezone": args.timezone,
+        "format": args.format,
+        "contact": args.contact,
+        "status": args.status,
+        "prep_focus": args.prep_focus,
+        "notes": args.notes,
+    })
+    print_json({"id": interview_id, "scheduled_at": args.scheduled_at, "status": args.status})
+
+
+def command_list_interviews(args):
+    ensure_db_dir(args.db)
+    print_json(list_interviews(args.db, args.limit, args.status))
+
+
+def command_update_interview(args):
+    ensure_db_dir(args.db)
+    ok = update_interview(
+        args.db,
+        args.interview_id,
+        stage=args.stage,
+        scheduled_at=args.scheduled_at,
+        timezone=args.timezone,
+        format=args.format,
+        contact=args.contact,
+        status=args.status,
+        prep_focus=args.prep_focus,
+        notes=args.notes,
+    )
+    if not ok:
+        raise SystemExit("No interview found with id " + str(args.interview_id))
+    print_json({"id": args.interview_id, "updated": True})
 
 
 def command_list_top(args):
@@ -231,6 +273,37 @@ def build_parser():
     prep = sub.add_parser("prep-interview", help="Map likely interview prep")
     add_text_inputs(prep)
     prep.set_defaults(func=command_prep_interview)
+
+    add_interview_parser = sub.add_parser("add-interview", help="Add an interview event")
+    add_interview_parser.add_argument("--job-id", type=int)
+    add_interview_parser.add_argument("--company")
+    add_interview_parser.add_argument("--role")
+    add_interview_parser.add_argument("--stage", default="phone screen")
+    add_interview_parser.add_argument("--scheduled-at", required=True, help="Local datetime, e.g. 2026-05-08T16:00")
+    add_interview_parser.add_argument("--timezone", default="America/Chicago")
+    add_interview_parser.add_argument("--format", default="phone")
+    add_interview_parser.add_argument("--contact")
+    add_interview_parser.add_argument("--status", default="scheduled")
+    add_interview_parser.add_argument("--prep-focus")
+    add_interview_parser.add_argument("--notes")
+    add_interview_parser.set_defaults(func=command_add_interview)
+
+    interviews = sub.add_parser("list-interviews", help="List interview events")
+    interviews.add_argument("--limit", type=int, default=25)
+    interviews.add_argument("--status")
+    interviews.set_defaults(func=command_list_interviews)
+
+    update_interview_parser = sub.add_parser("update-interview", help="Update an interview event")
+    update_interview_parser.add_argument("interview_id", type=int)
+    update_interview_parser.add_argument("--stage")
+    update_interview_parser.add_argument("--scheduled-at")
+    update_interview_parser.add_argument("--timezone")
+    update_interview_parser.add_argument("--format")
+    update_interview_parser.add_argument("--contact")
+    update_interview_parser.add_argument("--status")
+    update_interview_parser.add_argument("--prep-focus")
+    update_interview_parser.add_argument("--notes")
+    update_interview_parser.set_defaults(func=command_update_interview)
 
     top = sub.add_parser("list-top", help="List highest-scoring tracked jobs")
     top.add_argument("--limit", type=int, default=10)

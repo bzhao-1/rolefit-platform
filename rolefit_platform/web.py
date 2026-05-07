@@ -14,7 +14,7 @@ from rolefit_platform.resume import tailor_resume
 from rolefit_platform.resume_export import DEFAULT_OUTPUT_DIR, export_finished_resumes
 from rolefit_platform.resume_match import load_resume_text, resume_match, top_resume_matches
 from rolefit_platform.sources import DEFAULT_GREENHOUSE_BOARDS, SAVED_SEARCH_LINKS, pull_defaults, pull_greenhouse, pull_lever
-from rolefit_platform.storage import add_job, export_jobs, get_job, get_tailored_resume, list_jobs, stats, update_status
+from rolefit_platform.storage import add_interview, add_job, export_jobs, get_job, get_tailored_resume, list_interviews, list_jobs, stats, update_interview, update_status
 from rolefit_platform.text_utils import load_text_from_url
 
 
@@ -89,6 +89,7 @@ def layout(title, body):
     <a href="/add">Add</a>
     <a href="/pull">Pull</a>
     <a href="/matches">Resume Matches</a>
+    <a href="/interviews">Interviews</a>
     <a href="/export">Export</a>
   </nav></header>
   <main>""" + body + """</main>
@@ -129,6 +130,8 @@ class App(BaseHTTPRequestHandler):
             self.pull_page(params)
         elif path == "/matches":
             self.matches_page(params)
+        elif path == "/interviews":
+            self.interviews_page(params)
         elif path == "/job":
             self.job_page(params)
         elif path == "/export":
@@ -152,6 +155,22 @@ class App(BaseHTTPRequestHandler):
         elif parsed.path == "/update-status":
             update_status(self.db_path, int(data.get("job_id")), data.get("status"), data.get("notes"), data.get("contact"))
             self.redirect("/job?id=" + urllib.parse.quote(data.get("job_id", "")))
+        elif parsed.path == "/add-interview":
+            self.add_interview(data)
+        elif parsed.path == "/update-interview":
+            update_interview(
+                self.db_path,
+                int(data.get("interview_id")),
+                stage=data.get("stage"),
+                scheduled_at=data.get("scheduled_at"),
+                timezone=data.get("timezone"),
+                format=data.get("format"),
+                contact=data.get("contact"),
+                status=data.get("status"),
+                prep_focus=data.get("prep_focus"),
+                notes=data.get("notes"),
+            )
+            self.redirect("/interviews")
         elif parsed.path == "/pull-defaults":
             pull_defaults(self.db_path, int(data.get("limit") or "12"))
             self.redirect("/?pulled=1")
@@ -192,6 +211,26 @@ class App(BaseHTTPRequestHandler):
         auto_tailor_job(self.db_path, job_id)
         self.redirect("/job?id=" + str(job_id))
 
+    def add_interview(self, data):
+        job_id = int(data.get("job_id")) if data.get("job_id") else None
+        interview_id = add_interview(self.db_path, {
+            "job_id": job_id,
+            "company": data.get("company"),
+            "role": data.get("role"),
+            "stage": data.get("stage") or "phone screen",
+            "scheduled_at": data.get("scheduled_at"),
+            "timezone": data.get("timezone") or "America/Chicago",
+            "format": data.get("format") or "phone",
+            "contact": data.get("contact"),
+            "status": data.get("status") or "scheduled",
+            "prep_focus": data.get("prep_focus"),
+            "notes": data.get("notes"),
+        })
+        if data.get("from_job") and job_id:
+            self.redirect("/job?id=" + str(job_id))
+        else:
+            self.redirect("/interviews?added=" + str(interview_id))
+
     def add_from_url(self, data):
         text = load_text_from_url(data.get("url", ""))
         data["description"] = text
@@ -200,6 +239,7 @@ class App(BaseHTTPRequestHandler):
 
     def dashboard(self, params):
         rows = list_jobs(self.db_path, 80)
+        interviews = list_interviews(self.db_path, 5, "scheduled")
         summary = stats(self.db_path)
         pulled = "<div class='panel'><b>Pull complete.</b> New jobs were scored and deduped.</div>" if params.get("pulled") else ""
         cleaned = "<div class='panel'><b>Cleanup complete.</b> Non-US restricted jobs are now hidden as skipped.</div>" if params.get("cleaned") else ""
@@ -208,19 +248,25 @@ class App(BaseHTTPRequestHandler):
   <div class="stat"><span class="muted">Tracked</span><b>""" + str(summary["total"]) + """</b></div>
   <div class="stat"><span class="muted">75+ score</span><b>""" + str(summary["top_fit"]) + """</b></div>
   <div class="stat"><span class="muted">Applied</span><b>""" + str(summary["by_status"].get("applied", 0)) + """</b></div>
-  <div class="stat"><span class="muted">Interview</span><b>""" + str(summary["by_status"].get("interview", 0)) + """</b></div>
+  <div class="stat"><span class="muted">Scheduled</span><b>""" + str(summary["scheduled_interviews"]) + """</b></div>
 </div>
 <div class="grid">
 <section>
   <div class="panel row">
     <a class="button" href="/add">Add job</a>
     <a class="button secondary" href="/pull">Pull public feeds</a>
+    <a class="button ghost" href="/interviews">Interviews</a>
     <a class="button ghost" href="/export">Export CSV</a>
     <a class="button ghost" href="/export-resumes">Export resumes</a>
   </div>
 """ + self.jobs_html(rows) + """
 </section>
 <aside>
+  <div class="panel">
+    <h2>Upcoming Interviews</h2>
+""" + self.interviews_compact_html(interviews) + """
+    <p><a class="button ghost" href="/interviews">Open interview tracker</a></p>
+  </div>
   <div class="panel">
     <h2>Fast Workflow</h2>
     <p class="muted">Pull feeds or paste a posting, inspect the highest-scored roles, review resume fit, and export structured tracker data. Location rule: show US-eligible roles and global/anywhere remote roles only.</p>
@@ -263,6 +309,20 @@ class App(BaseHTTPRequestHandler):
   <span class="pill">""" + esc(row.get("status")) + """</span>
 </article>""")
         return "\n".join(parts)
+
+    def interviews_compact_html(self, rows):
+        if not rows:
+            return "<p class='muted'>No scheduled interviews yet.</p>"
+        parts = []
+        for row in rows:
+            parts.append("""
+<article class="job">
+  <div class="job-title">""" + esc(row.get("company")) + """ · """ + esc(row.get("stage")) + """</div>
+  <div class="muted">""" + esc(row.get("scheduled_at")) + """ """ + esc(row.get("timezone")) + """ · """ + esc(row.get("format")) + """</div>
+  <span class="pill">""" + esc(row.get("role")) + """</span>
+  <span class="pill">""" + esc(row.get("status")) + """</span>
+</article>""")
+        return "".join(parts)
 
     def add_page(self, params):
         body = """
@@ -367,6 +427,64 @@ class App(BaseHTTPRequestHandler):
 """ + ("\n".join(cards) if cards else "<div class='panel'>No visible jobs to match yet.</div>")
         self.send_html(body, "Resume Matches")
 
+    def interviews_page(self, params):
+        rows = list_interviews(self.db_path, 50)
+        added = "<div class='panel'><b>Interview saved.</b></div>" if params.get("added") else ""
+        cards = []
+        for row in rows:
+            link = ""
+            if row.get("job_id"):
+                link = " <a class='button ghost' href='/job?id=" + str(row.get("job_id")) + "'>Open job</a>"
+            cards.append("""
+<article class="job">
+  <div class="row"><span class="job-title">""" + esc(row.get("company")) + """ · """ + esc(row.get("stage")) + """</span>""" + link + """</div>
+  <div class="muted">""" + esc(row.get("role")) + """</div>
+  <span class="pill score">""" + esc(row.get("scheduled_at")) + """</span>
+  <span class="pill">""" + esc(row.get("timezone")) + """</span>
+  <span class="pill">""" + esc(row.get("format")) + """</span>
+  <span class="pill">""" + esc(row.get("status")) + """</span>
+  <p><b>Contact:</b> """ + esc(row.get("contact")) + """</p>
+  <p><b>Prep focus:</b> """ + esc(row.get("prep_focus")) + """</p>
+  <form method="post" action="/update-interview" class="row">
+    <input type="hidden" name="interview_id" value=\"""" + str(row.get("id")) + """\">
+    <select name="status" style="max-width:160px">
+      <option value="scheduled" """ + ("selected" if row.get("status") == "scheduled" else "") + """>scheduled</option>
+      <option value="completed" """ + ("selected" if row.get("status") == "completed" else "") + """>completed</option>
+      <option value="rescheduled" """ + ("selected" if row.get("status") == "rescheduled" else "") + """>rescheduled</option>
+      <option value="cancelled" """ + ("selected" if row.get("status") == "cancelled" else "") + """>cancelled</option>
+    </select>
+    <input name="notes" value=\"""" + esc(row.get("notes")) + """\" placeholder="Notes" style="min-width:260px; flex:1">
+    <button>Save</button>
+  </form>
+</article>""")
+        body = added + """
+<div class="grid">
+<section>
+  <div class="panel">
+    <h1>Interview Tracker</h1>
+    <p class="muted">Track each interview as a scheduled event with stage, time, contact, format, prep focus, and outcome notes.</p>
+  </div>
+""" + ("\n".join(cards) if cards else "<div class='panel'>No interviews yet.</div>") + """
+</section>
+<aside class="panel">
+  <h1>Add Interview</h1>
+  <form method="post" action="/add-interview">
+    <label>Company</label><input name="company" placeholder="Example Cloud Co.">
+    <label>Role</label><input name="role" placeholder="Software Engineer II">
+    <label>Stage</label><input name="stage" value="phone screen">
+    <label>Scheduled at</label><input name="scheduled_at" type="datetime-local">
+    <label>Timezone</label><input name="timezone" value="America/Chicago">
+    <label>Format</label><input name="format" value="phone">
+    <label>Contact</label><input name="contact" placeholder="Recruiter or interviewer">
+    <label>Prep focus</label><input name="prep_focus" placeholder="Recruiter screen, role story, timeline, compensation">
+    <label>Notes</label><textarea name="notes"></textarea>
+    <input type="hidden" name="status" value="scheduled">
+    <p><button>Add interview</button></p>
+  </form>
+</aside>
+</div>"""
+        self.send_html(body, "Interviews")
+
     def job_page(self, params):
         job_id = int((params.get("id") or ["0"])[0])
         job = get_job(self.db_path, job_id)
@@ -426,6 +544,22 @@ class App(BaseHTTPRequestHandler):
       <label>Contact</label><input name="contact" value=\"""" + esc(job.get("contact")) + """\">
       <label>Notes</label><textarea name="notes">""" + esc(job.get("notes")) + """</textarea>
       <p><button>Update</button></p>
+    </form>
+  </div>
+  <div class="panel">
+    <h2>Add Interview</h2>
+    <form method="post" action="/add-interview">
+      <input type="hidden" name="job_id" value=\"""" + str(job_id) + """\">
+      <input type="hidden" name="from_job" value="1">
+      <label>Stage</label><input name="stage" value="phone screen">
+      <label>Scheduled at</label><input name="scheduled_at" type="datetime-local">
+      <label>Timezone</label><input name="timezone" value="America/Chicago">
+      <label>Format</label><input name="format" value="phone">
+      <label>Contact</label><input name="contact" value=\"""" + esc(job.get("contact")) + """\">
+      <label>Prep focus</label><input name="prep_focus" placeholder="Recruiter screen, project story, role fit">
+      <label>Notes</label><textarea name="notes"></textarea>
+      <input type="hidden" name="status" value="scheduled">
+      <p><button>Add interview</button></p>
     </form>
   </div>
   <div class="panel">
