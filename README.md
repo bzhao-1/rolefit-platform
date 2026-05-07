@@ -14,6 +14,7 @@ The project is intentionally offline-first. It uses deterministic scoring, stand
 - Compare a resume against job requirements and rank tracked jobs by combined role score plus resume match score.
 - Generate tailored resume bullets, keyword lists, positioning guidance, gap analysis, project selections, and finished DOCX resumes.
 - Prefer production-grade framing for platform and release-operations work, including AI-assisted triage systems with explicit human approval boundaries.
+- Track interview events with stage, scheduled time, format, contact, prep focus, status, and notes.
 - Provide a dependency-free local dashboard for ingestion, scoring, tracking, matching, tailoring, status updates, and CSV export.
 
 ## Setup
@@ -131,6 +132,24 @@ Export finished DOCX resumes for matched postings:
 
 ```bash
 python3 -m rolefit_platform export-resumes --output-dir generated_resumes --limit 25
+```
+
+Add an interview event:
+
+```bash
+python3 -m rolefit_platform add-interview \
+  --company "Example Cloud Co." \
+  --role "Software Engineer II" \
+  --stage "phone screen" \
+  --scheduled-at "2026-05-08T16:00" \
+  --timezone "America/Chicago" \
+  --format "phone"
+```
+
+List scheduled interviews:
+
+```bash
+python3 -m rolefit_platform list-interviews --status scheduled
 ```
 
 Run tests:
