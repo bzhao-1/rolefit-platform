@@ -13,7 +13,7 @@ from rolefit_platform.resume_export import DEFAULT_OUTPUT_DIR, export_finished_r
 from rolefit_platform.resume_match import load_resume_text, resume_match, top_resume_matches
 from rolefit_platform.scoring import score_job
 from rolefit_platform.scraper_agent import recent_agent_runs, run_scraper_loop, run_scraper_once
-from rolefit_platform.sources import pull_defaults, pull_greenhouse, pull_lever
+from rolefit_platform.sources import pull_apple, pull_ashby, pull_defaults, pull_eightfold, pull_greenhouse, pull_lever, pull_workday
 from rolefit_platform.storage import add_interview, add_job, export_jobs, get_job, list_interviews, list_top, update_interview, update_status
 from rolefit_platform.text_utils import load_job_text
 from rolefit_platform.web import serve
@@ -188,6 +188,22 @@ def command_pull_jobs(args):
         result = pull_greenhouse(args.db, args.greenhouse_board, args.company, args.limit)
     elif args.lever_slug:
         result = pull_lever(args.db, args.lever_slug, args.company, args.limit)
+    elif args.eightfold_url:
+        result = pull_eightfold(args.db, args.eightfold_url, args.company, args.limit)
+    elif args.workday_site:
+        result = pull_workday(
+            args.db,
+            args.workday_base_url,
+            args.workday_tenant,
+            args.workday_site,
+            args.company,
+            args.limit,
+            args.workday_search,
+        )
+    elif args.ashby_board:
+        result = pull_ashby(args.db, args.ashby_board, args.company, args.limit)
+    elif args.apple_url:
+        result = pull_apple(args.db, args.apple_url, args.company or "Apple", args.limit)
     else:
         result = pull_defaults(args.db, args.limit)
     print_json(result)
@@ -334,6 +350,13 @@ def build_parser():
     pull = sub.add_parser("pull-jobs", help="Pull public ATS feeds, score, dedupe, and save")
     pull.add_argument("--greenhouse-board")
     pull.add_argument("--lever-slug")
+    pull.add_argument("--eightfold-url")
+    pull.add_argument("--workday-base-url", default="https://nvidia.wd5.myworkdayjobs.com")
+    pull.add_argument("--workday-tenant", default="nvidia")
+    pull.add_argument("--workday-site")
+    pull.add_argument("--workday-search", default="software engineer")
+    pull.add_argument("--ashby-board")
+    pull.add_argument("--apple-url")
     pull.add_argument("--company")
     pull.add_argument("--limit", type=int, default=12)
     pull.set_defaults(func=command_pull_jobs)
