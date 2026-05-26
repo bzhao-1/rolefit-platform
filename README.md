@@ -7,6 +7,7 @@ The project is intentionally offline-first. It uses deterministic scoring, stand
 ## Core Capabilities
 
 - Pull public Greenhouse and Lever postings, normalize descriptions, dedupe saved roles, and filter location eligibility.
+- Run an agent-style scraper loop for routine public ATS ingestion, scoring, cleanup, and tailoring without manual button-clicking.
 - Score postings from 0-100 for backend, platform, cloud infrastructure, distributed systems, reliability, automation, and production ownership signals.
 - Classify roles as `High priority`, `Review selectively`, or `Skip` using deterministic stack, level, location, and role-quality checks.
 - Detect infrastructure alignment across cloud platform systems, GPU/AI infrastructure, orchestration, APIs, reliability, and SRE collaboration.
@@ -70,6 +71,24 @@ Pull default public ATS feeds:
 
 ```bash
 python3 -m rolefit_platform pull-jobs --limit 12
+```
+
+Run the scraper agent once:
+
+```bash
+python3 -m rolefit_platform scrape-agent --once --limit 12
+```
+
+Run the scraper agent routinely every 6 hours:
+
+```bash
+python3 -m rolefit_platform scrape-agent --interval-minutes 360 --limit 12
+```
+
+Show recent scraper-agent runs:
+
+```bash
+python3 -m rolefit_platform scrape-agent --recent
 ```
 
 Pull a specific public Greenhouse board:
@@ -200,6 +219,7 @@ rolefit_platform/
   resume.py         resume tailoring engine
   resume_export.py  DOCX resume exporter
   resume_match.py   resume/job match scoring and ranking
+  scraper_agent.py  routine ATS scraping, scoring, dedupe, cleanup, and auto-tailoring
   scoring.py        0-100 scoring engine
   sources.py        Greenhouse/Lever feed ingestion
   storage.py        SQLite tracker and CSV export

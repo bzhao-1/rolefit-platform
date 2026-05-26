@@ -12,6 +12,7 @@ from rolefit_platform.resume import tailor_resume
 from rolefit_platform.resume_export import DEFAULT_OUTPUT_DIR, export_finished_resumes
 from rolefit_platform.resume_match import load_resume_text, resume_match, top_resume_matches
 from rolefit_platform.scoring import score_job
+from rolefit_platform.scraper_agent import recent_agent_runs, run_scraper_loop, run_scraper_once
 from rolefit_platform.sources import pull_defaults, pull_greenhouse, pull_lever
 from rolefit_platform.storage import add_interview, add_job, export_jobs, get_job, list_interviews, list_top, update_interview, update_status
 from rolefit_platform.text_utils import load_job_text
@@ -192,6 +193,16 @@ def command_pull_jobs(args):
     print_json(result)
 
 
+def command_scrape_agent(args):
+    ensure_db_dir(args.db)
+    if args.recent:
+        print_json(recent_agent_runs(args.db, args.limit))
+    elif args.once:
+        print_json(run_scraper_once(args.db, args.limit, args.resume))
+    else:
+        print_json(run_scraper_loop(args.db, args.interval_minutes, args.cycles, args.limit, args.resume))
+
+
 def command_cleanup_locations(args):
     ensure_db_dir(args.db)
     print_json(cleanup_locations(args.db))
@@ -326,6 +337,15 @@ def build_parser():
     pull.add_argument("--company")
     pull.add_argument("--limit", type=int, default=12)
     pull.set_defaults(func=command_pull_jobs)
+
+    agent = sub.add_parser("scrape-agent", help="Run the routine job scraping agent")
+    agent.add_argument("--once", action="store_true")
+    agent.add_argument("--recent", action="store_true")
+    agent.add_argument("--interval-minutes", type=int, default=360)
+    agent.add_argument("--cycles", type=int, default=0, help="0 means run forever")
+    agent.add_argument("--limit", type=int, default=12)
+    agent.add_argument("--resume", default=DEFAULT_RESUME_PATH)
+    agent.set_defaults(func=command_scrape_agent)
 
     cleanup = sub.add_parser("cleanup-locations", help="Rescore saved jobs and hide non-US restricted roles")
     cleanup.set_defaults(func=command_cleanup_locations)

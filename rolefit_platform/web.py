@@ -13,6 +13,7 @@ from rolefit_platform.outreach import outreach_message
 from rolefit_platform.resume import tailor_resume
 from rolefit_platform.resume_export import DEFAULT_OUTPUT_DIR, export_finished_resumes
 from rolefit_platform.resume_match import load_resume_text, resume_match, top_resume_matches
+from rolefit_platform.scraper_agent import recent_agent_runs, run_scraper_once
 from rolefit_platform.sources import DEFAULT_GREENHOUSE_BOARDS, SAVED_SEARCH_LINKS, pull_defaults, pull_greenhouse, pull_lever
 from rolefit_platform.storage import add_interview, add_job, export_jobs, get_job, get_tailored_resume, list_interviews, list_jobs, stats, update_interview, update_status
 from rolefit_platform.text_utils import load_text_from_url
@@ -23,7 +24,7 @@ def esc(value):
 
 
 def status_options(current):
-    statuses = ["saved", "pulled", "referral requested", "review requested", "applied", "interview", "offer", "rejected", "skipped"]
+    statuses = ["saved", "pulled", "referral requested", "applied", "interview", "offer", "rejected", "skipped"]
     current_value = current or "saved"
     parts = []
     for status in statuses:
@@ -46,18 +47,21 @@ def layout(title, body):
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>""" + esc(title) + """</title>
   <style>
-    :root { color-scheme: light; --ink:#172026; --muted:#5c6873; --line:#d9e0e7; --bg:#f6f8fa; --panel:#ffffff; --accent:#0f766e; --good:#0a7a37; --warn:#9a5b00; --bad:#b42318; }
+    :root { color-scheme: light; --ink:#18212f; --muted:#647183; --line:#d8e0ea; --bg:#f4f7fb; --panel:#ffffff; --soft:#eef6f4; --accent:#0f766e; --accent2:#1d4ed8; --good:#0a7a37; --warn:#9a5b00; --bad:#b42318; }
     * { box-sizing:border-box; }
-    body { margin:0; font:14px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; color:var(--ink); background:var(--bg); }
+    body { margin:0; font:14px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; color:var(--ink); background:linear-gradient(180deg,#f8fbff 0,#f4f7fb 220px); }
     header { position:sticky; top:0; z-index:1; background:rgba(255,255,255,.94); border-bottom:1px solid var(--line); backdrop-filter:blur(8px); }
     nav { max-width:1180px; margin:0 auto; padding:12px 18px; display:flex; align-items:center; gap:14px; }
     nav a { color:var(--ink); text-decoration:none; font-weight:650; }
     nav .brand { margin-right:auto; font-size:17px; }
-    main { max-width:1180px; margin:0 auto; padding:18px; }
-    .grid { display:grid; grid-template-columns:1.05fr .95fr; gap:16px; align-items:start; }
+    main { max-width:1280px; margin:0 auto; padding:18px; }
+    .hero { display:grid; grid-template-columns:1fr auto; gap:16px; align-items:end; margin-bottom:16px; }
+    .hero h1 { font-size:28px; margin-bottom:4px; }
+    .grid { display:grid; grid-template-columns:minmax(0,1.3fr) minmax(340px,.7fr); gap:16px; align-items:start; }
+    .three { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; }
     .stats { display:grid; grid-template-columns:repeat(4,1fr); gap:10px; margin-bottom:16px; }
     .stat, .panel, .job { background:var(--panel); border:1px solid var(--line); border-radius:8px; }
-    .stat { padding:12px; }
+    .stat { padding:12px; box-shadow:0 1px 2px rgba(15,23,42,.04); }
     .stat b { display:block; font-size:22px; }
     .panel { padding:14px; margin-bottom:16px; }
     h1, h2, h3 { margin:0 0 10px; letter-spacing:0; }
@@ -72,14 +76,20 @@ def layout(title, body):
     .row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
     .muted { color:var(--muted); }
     .job { padding:12px; margin-bottom:10px; }
-    .job-title { font-weight:750; font-size:15px; }
+    .job-title { font-weight:750; font-size:15px; color:var(--ink); text-decoration:none; }
     .pill { display:inline-flex; align-items:center; min-height:24px; padding:2px 8px; border-radius:999px; background:#eef3f7; margin:4px 4px 0 0; font-size:12px; font-weight:650; }
+    .stage { border-left:4px solid var(--accent); }
+    .stage h2 { display:flex; justify-content:space-between; gap:8px; align-items:center; }
+    .stage-count { color:var(--muted); font-size:12px; }
+    .agent-card { background:linear-gradient(135deg,#eaf7f4,#eef4ff); border-color:#c9ddd8; }
+    .agent-log { max-height:220px; overflow:auto; }
+    .split { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
     .score { color:var(--good); }
     .warn { color:var(--warn); }
     .bad { color:var(--bad); }
     pre { white-space:pre-wrap; background:#f1f5f9; border:1px solid var(--line); border-radius:8px; padding:12px; overflow:auto; }
     ul { margin-top:6px; padding-left:20px; }
-    @media (max-width: 820px) { .grid, .stats { grid-template-columns:1fr; } nav { overflow:auto; } }
+    @media (max-width: 900px) { .grid, .stats, .three, .hero, .split { grid-template-columns:1fr; } nav { overflow:auto; } }
   </style>
 </head>
 <body>
@@ -88,6 +98,7 @@ def layout(title, body):
     <a href="/">Dashboard</a>
     <a href="/add">Add</a>
     <a href="/pull">Pull</a>
+    <a href="/agent">Agent</a>
     <a href="/matches">Resume Matches</a>
     <a href="/interviews">Interviews</a>
     <a href="/export">Export</a>
@@ -128,6 +139,8 @@ class App(BaseHTTPRequestHandler):
             self.add_page(params)
         elif path == "/pull":
             self.pull_page(params)
+        elif path == "/agent":
+            self.agent_page(params)
         elif path == "/matches":
             self.matches_page(params)
         elif path == "/interviews":
@@ -174,6 +187,9 @@ class App(BaseHTTPRequestHandler):
         elif parsed.path == "/pull-defaults":
             pull_defaults(self.db_path, int(data.get("limit") or "12"))
             self.redirect("/?pulled=1")
+        elif parsed.path == "/agent-run":
+            run_scraper_once(self.db_path, int(data.get("limit") or "12"), DEFAULT_RESUME_PATH)
+            self.redirect("/agent?ran=1")
         elif parsed.path == "/pull-greenhouse":
             pull_greenhouse(self.db_path, data.get("board", ""), data.get("company", ""), int(data.get("limit") or "20"))
             self.redirect("/?pulled=1")
@@ -240,15 +256,41 @@ class App(BaseHTTPRequestHandler):
     def dashboard(self, params):
         rows = list_jobs(self.db_path, 80)
         interviews = list_interviews(self.db_path, 5, "scheduled")
+        runs = recent_agent_runs(self.db_path, 3)
         summary = stats(self.db_path)
         pulled = "<div class='panel'><b>Pull complete.</b> New jobs were scored and deduped.</div>" if params.get("pulled") else ""
         cleaned = "<div class='panel'><b>Cleanup complete.</b> Non-US restricted jobs are now hidden as skipped.</div>" if params.get("cleaned") else ""
         body = pulled + cleaned + """
+<section class="hero">
+  <div>
+    <h1>Job Search Cockpit</h1>
+    <p class="muted">Agent-assisted sourcing, scoring, resume tailoring, interviews, and follow-through in one local workflow.</p>
+  </div>
+  <form method="post" action="/agent-run" class="row">
+    <input name="limit" value="12" style="max-width:80px">
+    <button>Run scraper agent</button>
+  </form>
+</section>
 <div class="stats">
   <div class="stat"><span class="muted">Tracked</span><b>""" + str(summary["total"]) + """</b></div>
   <div class="stat"><span class="muted">75+ score</span><b>""" + str(summary["top_fit"]) + """</b></div>
   <div class="stat"><span class="muted">Applied</span><b>""" + str(summary["by_status"].get("applied", 0)) + """</b></div>
   <div class="stat"><span class="muted">Scheduled</span><b>""" + str(summary["scheduled_interviews"]) + """</b></div>
+</div>
+<div class="three">
+  <div class="panel agent-card">
+    <h2>Agent</h2>
+    """ + self.agent_status_html(runs) + """
+    <p><a class="button ghost" href="/agent">Tune sources</a></p>
+  </div>
+  <div class="panel">
+    <h2>Next Best Action</h2>
+    """ + self.next_action_html(rows, interviews) + """
+  </div>
+  <div class="panel">
+    <h2>Upcoming</h2>
+    """ + self.interviews_compact_html(interviews) + """
+  </div>
 </div>
 <div class="grid">
 <section>
@@ -259,32 +301,21 @@ class App(BaseHTTPRequestHandler):
     <a class="button ghost" href="/export">Export CSV</a>
     <a class="button ghost" href="/export-resumes">Export resumes</a>
   </div>
-""" + self.jobs_html(rows) + """
+""" + self.pipeline_html(rows) + """
 </section>
 <aside>
   <div class="panel">
-    <h2>Upcoming Interviews</h2>
-""" + self.interviews_compact_html(interviews) + """
-    <p><a class="button ghost" href="/interviews">Open interview tracker</a></p>
-  </div>
-  <div class="panel">
     <h2>Fast Workflow</h2>
-    <p class="muted">Pull feeds or paste a posting, inspect the highest-scored roles, review resume fit, and export structured tracker data. Location rule: show US-eligible roles and global/anywhere remote roles only.</p>
-    <form method="post" action="/pull-defaults">
-      <label>One-click pull limit per company</label>
-      <input name="limit" value="12">
-      <p><button>Pull default public feeds</button></p>
-    </form>
-    <form method="post" action="/cleanup-locations">
-      <p><button class="secondary">Clean up old non-US jobs</button></p>
-    </form>
-    <form method="post" action="/auto-tailor">
-      <p><button class="ghost">Generate missing tailored resumes</button></p>
-    </form>
+    <p class="muted">Review the agent discoveries, move strong matches to referral or applied, then prep from the job page. Location rule: US roles and global/anywhere remote only.</p>
+    <div class="row">
+      <a class="button" href="/matches">Resume matches</a>
+      <a class="button ghost" href="/interviews">Interview tracker</a>
+      <a class="button ghost" href="/export-resumes">Export resumes</a>
+    </div>
   </div>
   <div class="panel">
-    <h2>Custom Sources</h2>
-    <p class="muted">Add guarded career sites or curated source links in <code>sources.py</code>, then paste selected posting URLs back into the dashboard.</p>
+    <h2>Manual Search Links</h2>
+    <p class="muted">These companies use more guarded career sites, so open them and paste URLs back here.</p>
 """ + "".join("<p><a href='" + esc(url) + "' target='_blank'>" + esc(company) + "</a></p>" for company, url in SAVED_SEARCH_LINKS) + """
   </div>
 </aside>
@@ -309,6 +340,40 @@ class App(BaseHTTPRequestHandler):
   <span class="pill">""" + esc(row.get("status")) + """</span>
 </article>""")
         return "\n".join(parts)
+
+    def pipeline_html(self, rows):
+        groups = [
+            ("New high-fit", lambda row: row.get("status") in ["pulled", "saved"] and (row.get("score") or 0) >= 75),
+            ("Referral / apply", lambda row: row.get("status") in ["referral requested", "applied"]),
+            ("Interviewing", lambda row: row.get("status") == "interview"),
+        ]
+        parts = []
+        for title, predicate in groups:
+            selected = [row for row in rows if predicate(row)][:8]
+            parts.append("<section class='panel stage'><h2>" + esc(title) + "<span class='stage-count'>" + str(len(selected)) + "</span></h2>")
+            parts.append(self.jobs_html(selected) if selected else "<p class='muted'>Nothing here yet.</p>")
+            parts.append("</section>")
+        return "".join(parts)
+
+    def agent_status_html(self, runs):
+        if not runs:
+            return "<p class='muted'>No agent runs yet.</p>"
+        latest = runs[0]
+        return """
+<p><b>Last run:</b> """ + esc(latest.get("finished_at") or latest.get("started_at")) + """</p>
+<span class="pill">""" + esc(latest.get("status")) + """</span>
+<span class="pill">Added """ + str(latest.get("added_count") or 0) + """</span>
+<span class="pill">Skipped """ + str(latest.get("skipped_count") or 0) + """</span>
+<span class="pill">Errors """ + str(latest.get("error_count") or 0) + """</span>"""
+
+    def next_action_html(self, rows, interviews):
+        if interviews:
+            item = interviews[0]
+            return "<p><b>Prep:</b> " + esc(item.get("company")) + " " + esc(item.get("stage")) + " at " + esc(item.get("scheduled_at")) + "</p><p><a class='button ghost' href='/interviews'>Open prep notes</a></p>"
+        for row in rows:
+            if row.get("status") in ["pulled", "saved"] and (row.get("score") or 0) >= 75:
+                return "<p><b>Review:</b> " + esc(row.get("company")) + " · " + esc(row.get("role")) + "</p><p><a class='button ghost' href='/job?id=" + str(row.get("id")) + "'>Open role</a></p>"
+        return "<p class='muted'>Run the scraper agent or add a target role.</p>"
 
     def interviews_compact_html(self, rows):
         if not rows:
@@ -335,8 +400,8 @@ class App(BaseHTTPRequestHandler):
     <label>Location</label><input name="location" placeholder="Santa Clara, CA / Remote">
     <label>Link</label><input name="link" placeholder="https://...">
     <label>Description</label><textarea name="description" placeholder="Paste the job description here"></textarea>
-    <label>Contact</label><input name="contact" placeholder="Team contact or source">
-    <label>Notes</label><input name="notes" placeholder="Ownership, scope, or screening notes">
+    <label>Referral contact</label><input name="contact" placeholder="Platform team contact">
+    <label>Notes</label><input name="notes" placeholder="Ask for team guidance first">
     <input type="hidden" name="status" value="saved">
     <p><button>Score and save</button></p>
   </form>
@@ -386,6 +451,58 @@ class App(BaseHTTPRequestHandler):
 </div>"""
         self.send_html(body, "Pull jobs")
 
+    def agent_page(self, params):
+        runs = recent_agent_runs(self.db_path, 10)
+        ran = "<div class='panel'><b>Agent run complete.</b> New roles were scored, deduped, filtered, and auto-tailored.</div>" if params.get("ran") else ""
+        rows = []
+        for run in runs:
+            added = (run.get("summary") or {}).get("added") or []
+            rows.append("""
+<article class="job">
+  <div class="row"><span class="job-title">Run #""" + str(run.get("id")) + """</span><span class="pill">""" + esc(run.get("status")) + """</span></div>
+  <div class="muted">""" + esc(run.get("finished_at") or run.get("started_at")) + """ · limit """ + str(run.get("limit_per_company") or "") + """ per company</div>
+  <span class="pill score">Added """ + str(run.get("added_count") or 0) + """</span>
+  <span class="pill">Skipped """ + str(run.get("skipped_count") or 0) + """</span>
+  <span class="pill">Errors """ + str(run.get("error_count") or 0) + """</span>
+  <ul>""" + "".join("<li>" + esc(item.get("company")) + " · " + esc(item.get("role")) + " · " + str(item.get("score")) + "</li>" for item in added[:5]) + """</ul>
+</article>""")
+        body = ran + """
+<section class="hero">
+  <div>
+    <h1>Scraper Agent</h1>
+    <p class="muted">Runs public ATS pulls, filters for US/remote eligibility, scores roles, dedupes, auto-tailors resumes, and records every run.</p>
+  </div>
+  <form method="post" action="/agent-run" class="row">
+    <input name="limit" value="12" style="max-width:80px">
+    <button>Run now</button>
+  </form>
+</section>
+<div class="grid">
+<section>
+  <div class="panel agent-card">
+    <h2>Routine Mode</h2>
+    <p>For routine scraping, run this in a terminal and leave it open:</p>
+    <pre>python3 -m rolefit_platform scrape-agent --interval-minutes 360 --limit 12</pre>
+    <p class="muted">Use <code>--cycles 1</code> for one scheduled pass or <code>--once</code> for an immediate run. The UI reads the same run history.</p>
+  </div>
+  <div class="panel">
+    <h2>Run History</h2>
+    <div class="agent-log">""" + ("".join(rows) if rows else "<p class='muted'>No runs yet.</p>") + """</div>
+  </div>
+</section>
+<aside>
+  <div class="panel">
+    <h2>Sources</h2>
+""" + "".join("<p><b>" + esc(company) + "</b> · Greenhouse board <code>" + esc(board) + "</code></p>" for company, board in DEFAULT_GREENHOUSE_BOARDS.items()) + """
+  </div>
+  <div class="panel">
+    <h2>Guardrails</h2>
+    <p class="muted">Skips senior/staff roles, internships, weak support roles, non-US restricted roles, and duplicate postings. Adds tailoring snapshots automatically for new matches.</p>
+  </div>
+</aside>
+</div>"""
+        self.send_html(body, "Scraper Agent")
+
     def matches_page(self, params):
         resume_path = (params.get("resume") or [DEFAULT_RESUME_PATH])[0]
         limit = int((params.get("limit") or ["8"])[0])
@@ -407,8 +524,6 @@ class App(BaseHTTPRequestHandler):
   <p><b>Missing:</b> """ + esc(", ".join(row["missing_keywords"][:12])) + """</p>
   <h3>Auto-Tailored Bullets</h3>
   <ul>""" + "".join("<li>" + esc(item) + "</li>" for item in row["rewritten_bullets"][:5]) + """</ul>
-  <h3>Default Projects</h3>
-  <p>""" + esc(", ".join(project["name"] for project in row.get("projects") or [])) + """</p>
 </article>""")
         body = tailored_notice + """
 <div class="panel">
@@ -476,7 +591,7 @@ class App(BaseHTTPRequestHandler):
     <label>Timezone</label><input name="timezone" value="America/Chicago">
     <label>Format</label><input name="format" value="phone">
     <label>Contact</label><input name="contact" placeholder="Recruiter or interviewer">
-    <label>Prep focus</label><input name="prep_focus" placeholder="Recruiter screen, role story, timeline, compensation">
+    <label>Prep focus</label><input name="prep_focus" placeholder="Recruiter screen, role story, compensation, timeline">
     <label>Notes</label><textarea name="notes"></textarea>
     <input type="hidden" name="status" value="scheduled">
     <p><button>Add interview</button></p>
@@ -523,8 +638,7 @@ class App(BaseHTTPRequestHandler):
     <ul>""" + "".join("<li>" + esc(item) + "</li>" for item in tailored["rewritten_bullets"]) + """</ul>
     <p><b>Position as:</b> """ + esc(tailored["position_as"]) + """</p>
     <p><b>Keywords:</b> """ + esc(", ".join(tailored["keywords_to_inject"])) + """</p>
-    <p><b>Emphasize:</b> """ + esc(", ".join(tailored.get("experience_to_emphasize") or [])) + """</p>
-    <p><b>Projects:</b> """ + esc(", ".join(project["name"] for project in tailored.get("projects") or [])) + """</p>
+    <p><b>Emphasize:</b> """ + esc(", ".join(tailored["experience_to_emphasize"])) + """</p>
   </div>
   <div class="panel">
     <h2>Interview Prep</h2>
@@ -541,7 +655,7 @@ class App(BaseHTTPRequestHandler):
       <label>Status</label><select name="status">
         """ + status_options(job.get("status")) + """
       </select>
-      <label>Contact</label><input name="contact" value=\"""" + esc(job.get("contact")) + """\">
+      <label>Referral contact</label><input name="contact" value=\"""" + esc(job.get("contact")) + """\">
       <label>Notes</label><textarea name="notes">""" + esc(job.get("notes")) + """</textarea>
       <p><button>Update</button></p>
     </form>
@@ -563,7 +677,7 @@ class App(BaseHTTPRequestHandler):
     </form>
   </div>
   <div class="panel">
-    <h2>Outreach Note</h2>
+    <h2>Referral Message</h2>
     <pre>""" + esc(message) + """</pre>
   </div>
 </aside>

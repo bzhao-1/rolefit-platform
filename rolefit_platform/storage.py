@@ -64,12 +64,29 @@ create table if not exists interviews (
 """
 
 
+SCRAPE_RUNS_SCHEMA = """
+create table if not exists scrape_runs (
+    id integer primary key autoincrement,
+    started_at text default current_timestamp,
+    finished_at text,
+    status text,
+    limit_per_company integer,
+    added_count integer default 0,
+    skipped_count integer default 0,
+    error_count integer default 0,
+    summary text,
+    created_at text default current_timestamp
+);
+"""
+
+
 def connect(path):
     conn = sqlite3.connect(path)
     conn.row_factory = sqlite3.Row
     conn.execute(JOBS_SCHEMA)
     conn.execute(TAILORING_SCHEMA)
     conn.execute(INTERVIEWS_SCHEMA)
+    conn.execute(SCRAPE_RUNS_SCHEMA)
     ensure_column(conn, "tailored_resumes", "projects", "text")
     return conn
 
@@ -362,6 +379,47 @@ def update_interview(db_path, interview_id, **fields):
     ok = cur.rowcount > 0
     conn.close()
     return ok
+
+
+def save_scrape_run(db_path, run):
+    conn = connect(db_path)
+    cur = conn.execute(
+        """
+        insert into scrape_runs
+        (finished_at, status, limit_per_company, added_count, skipped_count, error_count, summary)
+        values (current_timestamp, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            run.get("status"),
+            run.get("limit_per_company"),
+            run.get("added_count", 0),
+            run.get("skipped_count", 0),
+            run.get("error_count", 0),
+            json.dumps(run.get("summary") or {}),
+        ),
+    )
+    conn.commit()
+    run_id = cur.lastrowid
+    conn.close()
+    return run_id
+
+
+def list_scrape_runs(db_path, limit=10):
+    conn = connect(db_path)
+    rows = conn.execute(
+        "select * from scrape_runs order by started_at desc limit ?",
+        (limit,),
+    ).fetchall()
+    conn.close()
+    result = []
+    for row in rows:
+        item = dict(row)
+        try:
+            item["summary"] = json.loads(item.get("summary") or "{}")
+        except json.JSONDecodeError:
+            item["summary"] = {}
+        result.append(item)
+    return result
 
 
 def export_jobs(db_path, output_path):
