@@ -6,7 +6,7 @@ The project is intentionally offline-first. It uses deterministic scoring, stand
 
 ## Core Capabilities
 
-- Pull public Greenhouse and Lever postings, normalize descriptions, dedupe saved roles, and filter location eligibility.
+- Pull public Greenhouse, Lever, Eightfold, Workday CXS, Ashby, and HTML search postings, normalize descriptions, dedupe saved roles, and filter location eligibility.
 - Run an agent-style scraper loop for routine public ATS ingestion, scoring, cleanup, and tailoring without manual button-clicking.
 - Score postings from 0-100 for backend, platform, cloud infrastructure, distributed systems, reliability, automation, and production ownership signals.
 - Classify roles as `High priority`, `Review selectively`, or `Skip` using deterministic stack, level, location, and role-quality checks.
@@ -73,6 +73,8 @@ Pull default public ATS feeds:
 python3 -m rolefit_platform pull-jobs --limit 12
 ```
 
+Default ingestion includes representative public ATS adapters for Greenhouse, Lever, Eightfold, Workday CXS, Ashby, and a public careers HTML search parser. Dynamic or guarded careers pages can still be saved manually through the dashboard or `add-job`.
+
 Run the scraper agent once:
 
 ```bash
@@ -97,6 +99,33 @@ Pull a specific public Greenhouse board:
 python3 -m rolefit_platform pull-jobs \
   --greenhouse-board grafanalabs \
   --company "Grafana Labs" \
+  --limit 20
+```
+
+Pull a Workday CXS source:
+
+```bash
+python3 -m rolefit_platform pull-jobs \
+  --workday-site ExampleExternalCareerSite \
+  --company "Example Systems" \
+  --limit 20
+```
+
+Pull an Ashby source:
+
+```bash
+python3 -m rolefit_platform pull-jobs \
+  --ashby-board example \
+  --company "Example AI" \
+  --limit 20
+```
+
+Pull a public careers HTML search page:
+
+```bash
+python3 -m rolefit_platform pull-jobs \
+  --apple-url "https://jobs.example.com/search?search=software%20engineer&location=united-states" \
+  --company "Example Devices" \
   --limit 20
 ```
 
@@ -221,7 +250,7 @@ rolefit_platform/
   resume_match.py   resume/job match scoring and ranking
   scraper_agent.py  routine ATS scraping, scoring, dedupe, cleanup, and auto-tailoring
   scoring.py        0-100 scoring engine
-  sources.py        Greenhouse/Lever feed ingestion
+  sources.py        ATS/feed ingestion adapters
   storage.py        SQLite tracker and CSV export
   text_utils.py     URL/text loading helpers
   web.py            dependency-free local browser UI

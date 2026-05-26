@@ -14,7 +14,7 @@ from rolefit_platform.resume import tailor_resume
 from rolefit_platform.resume_export import DEFAULT_OUTPUT_DIR, export_finished_resumes
 from rolefit_platform.resume_match import load_resume_text, resume_match, top_resume_matches
 from rolefit_platform.scraper_agent import recent_agent_runs, run_scraper_once
-from rolefit_platform.sources import DEFAULT_GREENHOUSE_BOARDS, SAVED_SEARCH_LINKS, pull_defaults, pull_greenhouse, pull_lever
+from rolefit_platform.sources import DEFAULT_APPLE_SEARCHES, DEFAULT_ASHBY_BOARDS, DEFAULT_EIGHTFOLD_SITES, DEFAULT_GREENHOUSE_BOARDS, DEFAULT_LEVER_SLUGS, DEFAULT_WORKDAY_SITES, GUARDED_SOURCES, SAVED_SEARCH_LINKS, pull_apple, pull_ashby, pull_defaults, pull_greenhouse, pull_lever, pull_workday
 from rolefit_platform.storage import add_interview, add_job, export_jobs, get_job, get_tailored_resume, list_interviews, list_jobs, stats, update_interview, update_status
 from rolefit_platform.text_utils import load_text_from_url
 
@@ -47,10 +47,10 @@ def layout(title, body):
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>""" + esc(title) + """</title>
   <style>
-    :root { color-scheme: light; --ink:#18212f; --muted:#647183; --line:#d8e0ea; --bg:#f4f7fb; --panel:#ffffff; --soft:#eef6f4; --accent:#0f766e; --accent2:#1d4ed8; --good:#0a7a37; --warn:#9a5b00; --bad:#b42318; }
+    :root { color-scheme: light; --ink:#202124; --muted:#667085; --line:#d7d2c8; --bg:#f7f3ea; --panel:#fffdf8; --soft:#eef1f4; --accent:#28536b; --accent2:#c47f2c; --good:#287a4f; --warn:#a15c14; --bad:#b42318; }
     * { box-sizing:border-box; }
-    body { margin:0; font:14px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; color:var(--ink); background:linear-gradient(180deg,#f8fbff 0,#f4f7fb 220px); }
-    header { position:sticky; top:0; z-index:1; background:rgba(255,255,255,.94); border-bottom:1px solid var(--line); backdrop-filter:blur(8px); }
+    body { margin:0; font:14px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; color:var(--ink); background:linear-gradient(180deg,#fbf8f1 0,#f7f3ea 240px); }
+    header { position:sticky; top:0; z-index:1; background:rgba(255,253,248,.94); border-bottom:1px solid var(--line); backdrop-filter:blur(8px); }
     nav { max-width:1180px; margin:0 auto; padding:12px 18px; display:flex; align-items:center; gap:14px; }
     nav a { color:var(--ink); text-decoration:none; font-weight:650; }
     nav .brand { margin-right:auto; font-size:17px; }
@@ -68,26 +68,26 @@ def layout(title, body):
     h1 { font-size:22px; }
     h2 { font-size:16px; }
     label { display:block; font-weight:650; margin:10px 0 4px; }
-    input, textarea, select { width:100%; border:1px solid var(--line); border-radius:6px; padding:9px 10px; font:inherit; background:#fff; color:var(--ink); }
+    input, textarea, select { width:100%; border:1px solid var(--line); border-radius:6px; padding:9px 10px; font:inherit; background:#fffdf8; color:var(--ink); }
     textarea { min-height:150px; resize:vertical; }
     button, .button { border:0; border-radius:6px; background:var(--accent); color:#fff; padding:9px 12px; font-weight:700; cursor:pointer; text-decoration:none; display:inline-block; }
-    .secondary { background:#334155; }
-    .ghost { background:#eef3f7; color:var(--ink); }
+    .secondary { background:#3e4c59; }
+    .ghost { background:#eee8dd; color:var(--ink); }
     .row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
     .muted { color:var(--muted); }
     .job { padding:12px; margin-bottom:10px; }
     .job-title { font-weight:750; font-size:15px; color:var(--ink); text-decoration:none; }
-    .pill { display:inline-flex; align-items:center; min-height:24px; padding:2px 8px; border-radius:999px; background:#eef3f7; margin:4px 4px 0 0; font-size:12px; font-weight:650; }
+    .pill { display:inline-flex; align-items:center; min-height:24px; padding:2px 8px; border-radius:999px; background:#eee8dd; margin:4px 4px 0 0; font-size:12px; font-weight:650; }
     .stage { border-left:4px solid var(--accent); }
     .stage h2 { display:flex; justify-content:space-between; gap:8px; align-items:center; }
     .stage-count { color:var(--muted); font-size:12px; }
-    .agent-card { background:linear-gradient(135deg,#eaf7f4,#eef4ff); border-color:#c9ddd8; }
+    .agent-card { background:linear-gradient(135deg,#f2eadc,#edf3f6); border-color:#cdbfa9; }
     .agent-log { max-height:220px; overflow:auto; }
     .split { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
     .score { color:var(--good); }
     .warn { color:var(--warn); }
     .bad { color:var(--bad); }
-    pre { white-space:pre-wrap; background:#f1f5f9; border:1px solid var(--line); border-radius:8px; padding:12px; overflow:auto; }
+    pre { white-space:pre-wrap; background:#f4efe5; border:1px solid var(--line); border-radius:8px; padding:12px; overflow:auto; }
     ul { margin-top:6px; padding-left:20px; }
     @media (max-width: 900px) { .grid, .stats, .three, .hero, .split { grid-template-columns:1fr; } nav { overflow:auto; } }
   </style>
@@ -195,6 +195,23 @@ class App(BaseHTTPRequestHandler):
             self.redirect("/?pulled=1")
         elif parsed.path == "/pull-lever":
             pull_lever(self.db_path, data.get("slug", ""), data.get("company", ""), int(data.get("limit") or "20"))
+            self.redirect("/?pulled=1")
+        elif parsed.path == "/pull-workday":
+            pull_workday(
+                self.db_path,
+                data.get("base_url", "") or "https://nvidia.wd5.myworkdayjobs.com",
+                data.get("tenant", "") or "nvidia",
+                data.get("site", ""),
+                data.get("company", ""),
+                int(data.get("limit") or "20"),
+                data.get("search_text", "") or "software engineer",
+            )
+            self.redirect("/?pulled=1")
+        elif parsed.path == "/pull-ashby":
+            pull_ashby(self.db_path, data.get("board", ""), data.get("company", ""), int(data.get("limit") or "20"))
+            self.redirect("/?pulled=1")
+        elif parsed.path == "/pull-apple":
+            pull_apple(self.db_path, data.get("url", ""), data.get("company", "") or "Apple", int(data.get("limit") or "20"))
             self.redirect("/?pulled=1")
         elif parsed.path == "/cleanup-locations":
             cleanup_locations(self.db_path)
@@ -395,12 +412,12 @@ class App(BaseHTTPRequestHandler):
 <section class="panel">
   <h1>Paste a Job</h1>
   <form method="post" action="/add-text">
-    <label>Company</label><input name="company" placeholder="Example Cloud Co.">
+    <label>Company</label><input name="company" placeholder="NVIDIA">
     <label>Role</label><input name="role" placeholder="Software Engineer II, Cloud Platform">
     <label>Location</label><input name="location" placeholder="Santa Clara, CA / Remote">
     <label>Link</label><input name="link" placeholder="https://...">
     <label>Description</label><textarea name="description" placeholder="Paste the job description here"></textarea>
-    <label>Referral contact</label><input name="contact" placeholder="Platform team contact">
+    <label>Referral contact</label><input name="contact" placeholder="Alex at NVIDIA">
     <label>Notes</label><input name="notes" placeholder="Ask for team guidance first">
     <input type="hidden" name="status" value="saved">
     <p><button>Score and save</button></p>
@@ -409,7 +426,7 @@ class App(BaseHTTPRequestHandler):
 <aside class="panel">
   <h1>Add by URL</h1>
   <form method="post" action="/add-url">
-    <label>Company</label><input name="company" placeholder="Example Platform Co.">
+    <label>Company</label><input name="company" placeholder="Google">
     <label>Role</label><input name="role" placeholder="Backend Software Engineer">
     <label>Location</label><input name="location">
     <label>URL</label><input name="url" placeholder="https://...">
@@ -425,7 +442,7 @@ class App(BaseHTTPRequestHandler):
 <div class="grid">
 <section class="panel">
   <h1>One-click Pull</h1>
-  <p class="muted">Pulls public Greenhouse boards for Anthropic, CoreWeave, Databricks, Datadog, Elastic, Grafana Labs, MongoDB, Stripe, and Cloudflare. Jobs are scored and deduped.</p>
+  <p class="muted">Pulls public Greenhouse, Lever, Eightfold, Workday CXS, Ashby, and careers-search HTML sources. Jobs are scored, deduped, filtered, and auto-tailored.</p>
   <p class="muted">Non-US onsite roles and country-restricted non-US remote roles are filtered out unless the posting explicitly includes US eligibility.</p>
   <form method="post" action="/pull-defaults">
     <label>Limit per company</label><input name="limit" value="12">
@@ -446,6 +463,30 @@ class App(BaseHTTPRequestHandler):
     <label>Company name</label><input name="company" placeholder="Company">
     <label>Limit</label><input name="limit" value="20">
     <p><button class="secondary">Pull Lever</button></p>
+  </form>
+  <hr>
+  <form method="post" action="/pull-workday">
+    <label>Workday base URL</label><input name="base_url" value="https://nvidia.wd5.myworkdayjobs.com">
+    <label>Tenant</label><input name="tenant" value="nvidia">
+    <label>Site</label><input name="site" value="NVIDIAExternalCareerSite">
+    <label>Company name</label><input name="company" value="NVIDIA">
+    <label>Search text</label><input name="search_text" value="software engineer">
+    <label>Limit</label><input name="limit" value="20">
+    <p><button class="secondary">Pull Workday</button></p>
+  </form>
+  <hr>
+  <form method="post" action="/pull-ashby">
+    <label>Ashby board</label><input name="board" value="openai">
+    <label>Company name</label><input name="company" value="OpenAI">
+    <label>Limit</label><input name="limit" value="20">
+    <p><button class="secondary">Pull Ashby</button></p>
+  </form>
+  <hr>
+  <form method="post" action="/pull-apple">
+    <label>Careers search URL</label><input name="url" value="https://jobs.apple.com/en-us/search?sort=relevance&amp;search=software%20engineer&amp;location=united-states-USA">
+    <label>Company name</label><input name="company" value="Apple">
+    <label>Limit</label><input name="limit" value="20">
+    <p><button class="secondary">Pull HTML Search</button></p>
   </form>
 </aside>
 </div>"""
@@ -494,6 +535,12 @@ class App(BaseHTTPRequestHandler):
   <div class="panel">
     <h2>Sources</h2>
 """ + "".join("<p><b>" + esc(company) + "</b> · Greenhouse board <code>" + esc(board) + "</code></p>" for company, board in DEFAULT_GREENHOUSE_BOARDS.items()) + """
+""" + "".join("<p><b>" + esc(company) + "</b> · Lever slug <code>" + esc(slug) + "</code></p>" for company, slug in DEFAULT_LEVER_SLUGS.items()) + """
+""" + "".join("<p><b>" + esc(company) + "</b> · Eightfold page</p>" for company, url in DEFAULT_EIGHTFOLD_SITES.items()) + """
+""" + "".join("<p><b>" + esc(company) + "</b> · Workday CXS site <code>" + esc(config["site"]) + "</code></p>" for company, config in DEFAULT_WORKDAY_SITES.items()) + """
+""" + "".join("<p><b>" + esc(company) + "</b> · Ashby board <code>" + esc(board) + "</code></p>" for company, board in DEFAULT_ASHBY_BOARDS.items()) + """
+""" + "".join("<p><b>" + esc(company) + "</b> · Apple careers HTML search</p>" for company, url in DEFAULT_APPLE_SEARCHES.items()) + """
+""" + "".join("<p><b>" + esc(company) + "</b> · Guarded source<br><span class='muted'>" + esc(reason) + "</span></p>" for company, reason in GUARDED_SOURCES.items()) + """
   </div>
   <div class="panel">
     <h2>Guardrails</h2>

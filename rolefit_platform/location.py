@@ -15,6 +15,7 @@ NON_US_SIGNALS = [
     "copenhagen", "mexico", "mexico city",
     "netherlands", "amsterdam", "singapore", "india", "bengaluru", "bangalore",
     "hyderabad", "japan", "tokyo", "china", "beijing", "shanghai", "australia",
+    "israel", "tel aviv", "raanana", "yokneam", "tel hai", "palestine", "rawabi", "hebron", "nablus",
 ]
 
 GLOBAL_REMOTE_SIGNALS = [
