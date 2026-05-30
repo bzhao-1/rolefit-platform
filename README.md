@@ -70,21 +70,23 @@ From the dashboard you can paste a job description, add a posting URL, pull publ
 Pull default public ATS feeds:
 
 ```bash
-python3 -m rolefit_platform pull-jobs --limit 12
+python3 -m rolefit_platform pull-jobs --limit 50
 ```
 
 Default ingestion includes representative public ATS adapters for Greenhouse, Lever, Eightfold, Workday CXS, Ashby, and a public careers HTML search parser. Dynamic or guarded careers pages can still be saved manually through the dashboard or `add-job`.
 
+The scraper does broad market ingestion first, then uses the resume for scoring and tailoring. Workday searches expand across backend, platform, infrastructure, cloud, developer infrastructure, reliability, production engineering, AI infrastructure, and data infrastructure terms. Relevant source-filtered roles are saved even when the classifier says `Skip`, so the dashboard can show the role and the resume tailorer can still attempt a fit analysis.
+
 Run the scraper agent once:
 
 ```bash
-python3 -m rolefit_platform scrape-agent --once --limit 12
+python3 -m rolefit_platform scrape-agent --once --limit 50
 ```
 
 Run the scraper agent routinely every 6 hours:
 
 ```bash
-python3 -m rolefit_platform scrape-agent --interval-minutes 360 --limit 12
+python3 -m rolefit_platform scrape-agent --interval-minutes 360 --limit 50
 ```
 
 Show recent scraper-agent runs:

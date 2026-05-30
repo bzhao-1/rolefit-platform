@@ -146,6 +146,31 @@ def find_existing_job(db_path, company=None, role=None, link=None):
     return dict(row) if row else None
 
 
+def update_job_source_metadata(db_path, job_id, job):
+    conn = connect(db_path)
+    conn.execute(
+        """
+        update jobs
+        set posted_at = coalesce(nullif(?, ''), posted_at),
+            source = coalesce(nullif(?, ''), source),
+            location = coalesce(nullif(?, ''), location),
+            description = coalesce(nullif(?, ''), description),
+            updated_at = current_timestamp
+        where id = ?
+        """,
+        (
+            job.get("posted_at") or "",
+            job.get("source") or "",
+            job.get("location") or "",
+            job.get("description") or "",
+            job_id,
+        ),
+    )
+    conn.commit()
+    conn.close()
+    return True
+
+
 def get_job(db_path, job_id):
     conn = connect(db_path)
     row = conn.execute("select * from jobs where id = ?", (job_id,)).fetchone()
