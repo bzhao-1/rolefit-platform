@@ -3,11 +3,12 @@ import re
 import urllib.parse
 import urllib.request
 import html
+from datetime import datetime, timedelta
 
 from rolefit_platform.auto_tailor import auto_tailor_job
 from rolefit_platform.classifier import classify_job
 from rolefit_platform.location import NON_US_SIGNALS, US_SIGNALS, has_signal, location_fit
-from rolefit_platform.storage import add_job, find_existing_job
+from rolefit_platform.storage import add_job, find_existing_job, update_job_source_metadata
 from rolefit_platform.text_utils import normalize
 
 
@@ -36,7 +37,7 @@ DEFAULT_WORKDAY_SITES = {
         "base_url": "https://nvidia.wd5.myworkdayjobs.com",
         "tenant": "nvidia",
         "site": "NVIDIAExternalCareerSite",
-        "search_text": "software engineer",
+        "search_text": "broad",
     },
 }
 
@@ -87,13 +88,18 @@ SAVED_SEARCH_LINKS = [
 ROLE_FILTER = [
     "software engineer", "backend", "platform", "infrastructure", "cloud", "distributed",
     "reliability", "sre", "developer infrastructure", "build", "release", "deployment",
-    "kubernetes", "ai infrastructure", "compute",
+    "kubernetes", "ai infrastructure", "compute", "api", "microservices", "data infrastructure",
+    "ml infrastructure", "observability", "automation", "test automation", "linux", "networking",
+    "developer productivity", "devops", "ci/cd",
 ]
 
 TITLE_FILTER = [
     "software engineer", "backend engineer", "platform engineer", "infrastructure engineer",
     "cloud engineer", "site reliability", "sre", "reliability engineer", "build engineer",
     "release engineer", "developer infrastructure", "systems engineer", "distributed systems",
+    "software developer", "cloud infrastructure", "data infrastructure", "ml infrastructure",
+    "observability engineer", "automation engineer", "devops engineer", "production engineer",
+    "infrastructure software", "platform software",
 ]
 
 TITLE_AVOID = [
@@ -102,6 +108,68 @@ TITLE_AVOID = [
     "software engineering 4", "software engineering 5", "engineer in test",
     "embedded", "firmware",
 ]
+
+DEFAULT_SEARCH_TERMS = [
+    "software engineer",
+    "backend engineer",
+    "platform engineer",
+    "infrastructure engineer",
+    "cloud engineer",
+    "developer infrastructure",
+    "site reliability engineer",
+    "reliability engineer",
+    "build release engineer",
+    "ai infrastructure engineer",
+    "data infrastructure engineer",
+    "production engineer",
+    "devops engineer",
+]
+
+
+def expand_search_terms(search_text=None):
+    raw = (search_text or "").strip()
+    if not raw or raw.lower() in ["broad", "auto", "default"]:
+        return DEFAULT_SEARCH_TERMS
+    return [item.strip() for item in raw.split("|") if item.strip()]
+
+
+def normalize_posted_at(value, today=None):
+    raw = str(value or "").strip()
+    if not raw:
+        return ""
+    today = today or datetime.now().date()
+    lower = raw.lower().replace("posted", "").strip()
+    if raw.isdigit():
+        stamp = int(raw)
+        if stamp > 100000000000:
+            stamp = stamp // 1000
+        try:
+            return datetime.fromtimestamp(stamp).date().isoformat()
+        except (OverflowError, OSError, ValueError):
+            return raw
+    if "today" in lower:
+        return today.isoformat()
+    if "yesterday" in lower:
+        return (today - timedelta(days=1)).isoformat()
+    day_match = re.search(r"(\d+)\+?\s+day", lower)
+    if day_match:
+        return (today - timedelta(days=int(day_match.group(1)))).isoformat()
+    week_match = re.search(r"(\d+)\+?\s+week", lower)
+    if week_match:
+        return (today - timedelta(days=int(week_match.group(1)) * 7)).isoformat()
+    month_match = re.search(r"(\d+)\+?\s+month", lower)
+    if month_match:
+        return (today - timedelta(days=int(month_match.group(1)) * 30)).isoformat()
+    try:
+        return datetime.fromisoformat(raw.replace("Z", "+00:00")).date().isoformat()
+    except ValueError:
+        pass
+    for fmt in ["%Y-%m-%dT%H:%M:%S.%fZ", "%Y-%m-%dT%H:%M:%SZ", "%Y-%m-%d", "%b %d, %Y", "%B %d, %Y"]:
+        try:
+            return datetime.strptime(raw, fmt).date().isoformat()
+        except ValueError:
+            pass
+    return raw
 
 
 def fetch_json(url):
@@ -185,7 +253,7 @@ def greenhouse_jobs(board, company, limit=25):
             "location": display_location(title, location, text),
             "link": item.get("absolute_url"),
             "description": text,
-            "posted_at": item.get("updated_at"),
+            "posted_at": normalize_posted_at(item.get("first_published") or item.get("published_at") or item.get("updated_at")),
             "source": "Greenhouse",
             "notes": "Pulled from Greenhouse board: " + board,
         })
@@ -212,7 +280,7 @@ def lever_jobs(slug, company, limit=25):
             "location": display_location(title, location, text),
             "link": item.get("hostedUrl"),
             "description": text,
-            "posted_at": str(item.get("createdAt") or ""),
+            "posted_at": normalize_posted_at(item.get("createdAt")),
             "source": "Lever",
             "notes": "Pulled from Lever slug: " + slug,
         })
@@ -255,7 +323,7 @@ def eightfold_jobs(url, company, limit=25):
             "location": display_location(title, location, text),
             "link": link,
             "description": text,
-            "posted_at": item.get("posted_date") or item.get("date_posted") or item.get("posted_on"),
+            "posted_at": normalize_posted_at(item.get("posted_date") or item.get("date_posted") or item.get("posted_on")),
             "source": "Eightfold",
             "notes": "Pulled from Eightfold careers page: " + url,
         })
@@ -269,50 +337,58 @@ def workday_detail(base_url, tenant, site, external_path):
     return fetch_json(url)
 
 
-def workday_jobs(base_url, tenant, site, company, search_text="software engineer", limit=25):
+def workday_jobs(base_url, tenant, site, company, search_text="broad", limit=25):
     endpoint = base_url.rstrip("/") + "/wday/cxs/" + urllib.parse.quote(tenant) + "/" + urllib.parse.quote(site) + "/jobs"
-    payload = {"appliedFacets": {}, "limit": 20, "offset": 0, "searchText": search_text}
-    data = post_json(endpoint, payload)
     jobs = []
     seen = set()
-    for item in data.get("jobPostings", []):
-        title = item.get("title") or ""
-        external_path = item.get("externalPath") or ""
-        if not title or not external_path or external_path in seen:
-            continue
-        seen.add(external_path)
-        info = {}
-        try:
-            info = (workday_detail(base_url, tenant, site, external_path).get("jobPostingInfo") or {})
-        except Exception:
-            info = {}
-        title = info.get("title") or title
-        locations = []
-        if info.get("location"):
-            locations.append(info.get("location"))
-        for location in info.get("additionalLocations") or []:
-            if location:
-                locations.append(location)
-        if not locations and item.get("locationsText"):
-            locations.append(item.get("locationsText"))
-        location = ", ".join(locations)
-        description = strip_html(info.get("jobDescription") or "")
-        text = normalize(" ".join([title, company, location, item.get("postedOn") or "", description]))
-        if not job_passes(title, company, location, text):
-            continue
-        link = info.get("externalUrl") or (base_url.rstrip("/") + "/" + urllib.parse.quote(site) + external_path)
-        jobs.append({
-            "company": company,
-            "role": title,
-            "location": display_location(title, location, text),
-            "link": link,
-            "description": text,
-            "posted_at": info.get("postedOn") or item.get("postedOn"),
-            "source": "Workday",
-            "notes": "Pulled from Workday CXS site: " + site,
-        })
-        if len(jobs) >= limit:
-            break
+    for term in expand_search_terms(search_text):
+        offset = 0
+        while len(jobs) < limit and offset < 200:
+            payload = {"appliedFacets": {}, "limit": 20, "offset": offset, "searchText": term}
+            data = post_json(endpoint, payload)
+            postings = data.get("jobPostings", [])
+            if not postings:
+                break
+            for item in postings:
+                title = item.get("title") or ""
+                external_path = item.get("externalPath") or ""
+                if not title or not external_path or external_path in seen:
+                    continue
+                seen.add(external_path)
+                info = {}
+                try:
+                    info = (workday_detail(base_url, tenant, site, external_path).get("jobPostingInfo") or {})
+                except Exception:
+                    info = {}
+                title = info.get("title") or title
+                locations = []
+                if info.get("location"):
+                    locations.append(info.get("location"))
+                for location in info.get("additionalLocations") or []:
+                    if location:
+                        locations.append(location)
+                if not locations and item.get("locationsText"):
+                    locations.append(item.get("locationsText"))
+                location = ", ".join(locations)
+                description = strip_html(info.get("jobDescription") or "")
+                posted = info.get("postedOn") or item.get("postedOn")
+                text = normalize(" ".join([title, company, location, posted or "", description]))
+                if not job_passes(title, company, location, text):
+                    continue
+                link = info.get("externalUrl") or (base_url.rstrip("/") + "/" + urllib.parse.quote(site) + external_path)
+                jobs.append({
+                    "company": company,
+                    "role": title,
+                    "location": display_location(title, location, text),
+                    "link": link,
+                    "description": text,
+                    "posted_at": normalize_posted_at(posted),
+                    "source": "Workday",
+                    "notes": "Pulled from Workday CXS site: " + site + " using search: " + term,
+                })
+                if len(jobs) >= limit:
+                    break
+            offset += 20
     return jobs
 
 
@@ -336,7 +412,7 @@ def ashby_jobs(board, company, limit=25):
             "location": display_location(title, location, text),
             "link": item.get("jobUrl"),
             "description": text,
-            "posted_at": item.get("publishedAt"),
+            "posted_at": normalize_posted_at(item.get("publishedAt")),
             "source": "Ashby",
             "notes": "Pulled from Ashby board: " + board,
         })
@@ -388,7 +464,7 @@ def apple_jobs(search_url, company="Apple", limit=25):
             "location": display_location(title, location, text),
             "link": link,
             "description": text,
-            "posted_at": item.get("posted"),
+            "posted_at": normalize_posted_at(item.get("posted")),
             "source": "Apple Careers",
             "notes": "Pulled from Apple careers search: " + search_url,
         })
@@ -403,12 +479,10 @@ def score_and_store(db_path, jobs):
     for job in jobs:
         existing = find_existing_job(db_path, job.get("company"), job.get("role"), job.get("link"))
         if existing:
+            update_job_source_metadata(db_path, existing["id"], job)
             skipped.append({"reason": "duplicate", "id": existing["id"], "role": job.get("role")})
             continue
         classified = classify_job(job.get("description", ""), job.get("company"))
-        if classified["decision"] == "Skip":
-            skipped.append({"reason": classified["reasoning"], "role": job.get("role")})
-            continue
         job["score"] = classified["score"]["score"]
         job["infrastructure_alignment_score"] = classified["alignment"]["similarity_score"]
         job["apply_decision"] = classified["decision"]

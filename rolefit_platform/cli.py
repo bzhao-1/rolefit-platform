@@ -354,11 +354,11 @@ def build_parser():
     pull.add_argument("--workday-base-url", default="https://nvidia.wd5.myworkdayjobs.com")
     pull.add_argument("--workday-tenant", default="nvidia")
     pull.add_argument("--workday-site")
-    pull.add_argument("--workday-search", default="software engineer")
+    pull.add_argument("--workday-search", default="broad")
     pull.add_argument("--ashby-board")
     pull.add_argument("--apple-url")
     pull.add_argument("--company")
-    pull.add_argument("--limit", type=int, default=12)
+    pull.add_argument("--limit", type=int, default=50)
     pull.set_defaults(func=command_pull_jobs)
 
     agent = sub.add_parser("scrape-agent", help="Run the routine job scraping agent")
@@ -366,7 +366,7 @@ def build_parser():
     agent.add_argument("--recent", action="store_true")
     agent.add_argument("--interval-minutes", type=int, default=360)
     agent.add_argument("--cycles", type=int, default=0, help="0 means run forever")
-    agent.add_argument("--limit", type=int, default=12)
+    agent.add_argument("--limit", type=int, default=50)
     agent.add_argument("--resume", default=DEFAULT_RESUME_PATH)
     agent.set_defaults(func=command_scrape_agent)
 

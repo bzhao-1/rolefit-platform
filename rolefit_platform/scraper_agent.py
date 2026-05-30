@@ -20,7 +20,7 @@ def summarize_pull(result):
     return added, skipped_count, error_count
 
 
-def run_scraper_once(db_path, limit_per_company=12, resume_path=None):
+def run_scraper_once(db_path, limit_per_company=50, resume_path=None):
     pull_result = pull_defaults(db_path, limit_per_company)
     cleanup = cleanup_locations(db_path)
     tailoring = auto_tailor_jobs(db_path, resume_path or DEFAULT_RESUME_PATH, True, 500)
@@ -44,7 +44,7 @@ def run_scraper_once(db_path, limit_per_company=12, resume_path=None):
     return run
 
 
-def run_scraper_loop(db_path, interval_minutes=360, cycles=0, limit_per_company=12, resume_path=None):
+def run_scraper_loop(db_path, interval_minutes=360, cycles=0, limit_per_company=50, resume_path=None):
     runs = []
     count = 0
     while True:

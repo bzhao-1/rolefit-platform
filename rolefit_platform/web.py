@@ -25,7 +25,7 @@ def esc(value):
 
 
 def status_options(current):
-    statuses = ["saved", "pulled", "referral requested", "applied", "interview", "offer", "rejected", "skipped"]
+    statuses = ["saved", "pulled", "contact requested", "applied", "interview", "offer", "rejected", "skipped"]
     current_value = current or "saved"
     parts = []
     for status in statuses:
@@ -69,6 +69,10 @@ def display_date(value):
             return datetime.fromtimestamp(int(raw[:10])).strftime("%b %-d, %Y")
         except Exception:
             return raw
+    try:
+        return datetime.fromisoformat(raw.replace("Z", "+00:00")).strftime("%b %-d, %Y")
+    except Exception:
+        pass
     for fmt in ["%Y-%m-%dT%H:%M:%S.%fZ", "%Y-%m-%dT%H:%M:%SZ", "%Y-%m-%d %H:%M:%S"]:
         try:
             return datetime.strptime(raw, fmt).strftime("%b %-d, %Y")
@@ -274,17 +278,17 @@ def layout(title, body):
       draggedJob = null;
     });
     document.addEventListener("dragover", event => {
-      const column = event.target.closest("[data-status]");
+      const column = event.target.closest(".status-col");
       if (!column || !draggedJob) return;
       event.preventDefault();
       column.classList.add("drag-over");
     });
     document.addEventListener("dragleave", event => {
-      const column = event.target.closest("[data-status]");
+      const column = event.target.closest(".status-col");
       if (column && !column.contains(event.relatedTarget)) column.classList.remove("drag-over");
     });
     document.addEventListener("drop", async event => {
-      const column = event.target.closest("[data-status]");
+      const column = event.target.closest(".status-col");
       if (!column || !draggedJob) return;
       event.preventDefault();
       column.classList.remove("drag-over");
@@ -363,7 +367,7 @@ class App(BaseHTTPRequestHandler):
         elif parsed.path == "/add-url":
             self.add_from_url(data)
         elif parsed.path == "/update-status":
-            update_status(self.db_path, int(data.get("job_id")), data.get("status"), data.get("notes"), data.get("referral_contact"))
+            update_status(self.db_path, int(data.get("job_id")), data.get("status"), data.get("notes"), data.get("contact"))
             self.redirect("/job?id=" + urllib.parse.quote(data.get("job_id", "")))
         elif parsed.path == "/drag-status":
             ok = update_status(self.db_path, int(data.get("job_id")), data.get("status"))
@@ -390,10 +394,10 @@ class App(BaseHTTPRequestHandler):
             )
             self.redirect("/interviews")
         elif parsed.path == "/pull-defaults":
-            pull_defaults(self.db_path, int(data.get("limit") or "12"))
+            pull_defaults(self.db_path, int(data.get("limit") or "50"))
             self.redirect("/?pulled=1")
         elif parsed.path == "/agent-run":
-            run_scraper_once(self.db_path, int(data.get("limit") or "12"), DEFAULT_RESUME_PATH)
+            run_scraper_once(self.db_path, int(data.get("limit") or "50"), DEFAULT_RESUME_PATH)
             self.redirect("/agent?ran=1")
         elif parsed.path == "/pull-greenhouse":
             pull_greenhouse(self.db_path, data.get("board", ""), data.get("company", ""), int(data.get("limit") or "20"))
@@ -409,7 +413,7 @@ class App(BaseHTTPRequestHandler):
                 data.get("site", ""),
                 data.get("company", ""),
                 int(data.get("limit") or "20"),
-                data.get("search_text", "") or "software engineer",
+                data.get("search_text", "") or "broad",
             )
             self.redirect("/?pulled=1")
         elif parsed.path == "/pull-ashby":
@@ -492,7 +496,7 @@ class App(BaseHTTPRequestHandler):
     <p class="muted">Verified ATS ingestion, deterministic filters, resume match scoring, tailoring automation, and tracker actions in one local workflow.</p>
   </div>
   <form method="post" action="/agent-run" class="row">
-    <input name="limit" value="12" style="max-width:80px">
+    <input name="limit" value="50" style="max-width:80px">
     <button>Refresh jobs</button>
   </form>
 </section>
@@ -522,7 +526,7 @@ class App(BaseHTTPRequestHandler):
         """ + self.option_html(["", "Python", "Java", "Go", "C++", "Kubernetes", "Docker", "Linux", "CI/CD", "PyTest"], (params.get("tech") or [""])[0], "Any") + """
       </select>
       <label>Status</label><select name="status">
-        """ + self.option_html(["", "saved", "pulled", "referral requested", "applied", "interview", "offer", "rejected", "skipped"], (params.get("status") or [""])[0], "Any") + """
+        """ + self.option_html(["", "saved", "pulled", "contact requested", "applied", "interview", "offer", "rejected", "skipped"], (params.get("status") or [""])[0], "Any") + """
       </select>
       <p><button>Apply filters</button></p>
       <p><a class="button ghost" href="/">Reset</a></p>
@@ -555,7 +559,7 @@ class App(BaseHTTPRequestHandler):
         columns = [
             ("saved", "Saved"),
             ("pulled", "New"),
-            ("referral requested", "Referral"),
+            ("contact requested", "Contact"),
             ("applied", "Applied"),
             ("interview", "Interviewing"),
             ("offer", "Offer"),
@@ -567,7 +571,7 @@ class App(BaseHTTPRequestHandler):
             parts.append("<div class='status-col' data-status='" + esc(status) + "'><h2>" + esc(label) + "<span class='stage-count'>" + str(len([row for row in rows if row.get("status") == status])) + "</span></h2>")
             if selected:
                 for row in selected:
-                    parts.append("<a class='mini-job' draggable='true' data-job-id='" + str(row.get("id")) + "' data-status='" + esc(status) + "' href='/job?id=" + str(row.get("id")) + "'>" + esc(row.get("company")) + " · " + esc(row.get("role")) + "<span>" + esc(posted_label(row)) + " · Fit " + str(row.get("score") or 0) + "</span></a>")
+                    parts.append("<a class='mini-job' draggable='true' data-job-id='" + str(row.get("id")) + "' href='/job?id=" + str(row.get("id")) + "'>" + esc(row.get("company")) + " · " + esc(row.get("role")) + "<span>" + esc(posted_label(row)) + " · Fit " + str(row.get("score") or 0) + "</span></a>")
             else:
                 parts.append("<p class='muted empty-status'>Empty</p>")
             parts.append("</div>")
@@ -581,7 +585,7 @@ class App(BaseHTTPRequestHandler):
 <section class="hero">
   <div>
     <h1>Application Status</h1>
-    <p class="muted">A quick board for saved roles, referrals, applications, interviews, offers, and rejections.</p>
+    <p class="muted">A quick board for saved roles, contacts, applications, interviews, offers, and rejections.</p>
   </div>
   <a class="button" href="/">Back to job feed</a>
 </section>
@@ -593,7 +597,7 @@ class App(BaseHTTPRequestHandler):
   </section>
   <aside class="panel">
     <h2>Status Shortcuts</h2>
-    <p class="muted">Open any job card to update status, referral contact, notes, or add an interview round.</p>
+    <p class="muted">Open any job card to update status, contact, notes, or add an interview round.</p>
     <p><a class="button ghost" href="/interviews">Open interview tracker</a></p>
   </aside>
 </div>"""
@@ -675,7 +679,7 @@ class App(BaseHTTPRequestHandler):
     def pipeline_html(self, rows):
         groups = [
             ("New high-fit", lambda row: row.get("status") in ["pulled", "saved"] and (row.get("score") or 0) >= 75),
-            ("Referral / apply", lambda row: row.get("status") in ["referral requested", "applied"]),
+            ("Contact / apply", lambda row: row.get("status") in ["contact requested", "applied"]),
             ("Interviewing", lambda row: row.get("status") == "interview"),
         ]
         parts = []
@@ -726,13 +730,13 @@ class App(BaseHTTPRequestHandler):
 <section class="panel">
   <h1>Paste a Job</h1>
   <form method="post" action="/add-text">
-    <label>Company</label><input name="company" placeholder="NVIDIA">
+    <label>Company</label><input name="company" placeholder="Cloud Platform Co.">
     <label>Role</label><input name="role" placeholder="Software Engineer II, Cloud Platform">
     <label>Location</label><input name="location" placeholder="Santa Clara, CA / Remote">
     <label>Link</label><input name="link" placeholder="https://...">
     <label>Posted date</label><input name="posted_at" placeholder="May 30, 2026 / Posted 3 Days Ago">
     <label>Description</label><textarea name="description" placeholder="Paste the job description here"></textarea>
-    <label>Referral contact</label><input name="contact" placeholder="Recruiter or hiring contact">
+    <label>Contact</label><input name="contact" placeholder="Recruiter or hiring contact">
     <label>Notes</label><input name="notes" placeholder="Ask for team guidance first">
     <input type="hidden" name="status" value="saved">
     <p><button>Score and save</button></p>
@@ -760,7 +764,7 @@ class App(BaseHTTPRequestHandler):
   <p class="muted">Pulls public Greenhouse, Lever, Eightfold, Workday CXS, Ashby, and Apple careers search sources. Jobs are scored, deduped, filtered, and auto-tailored.</p>
   <p class="muted">Non-US onsite roles and country-restricted non-US remote roles are filtered out unless the posting explicitly includes US eligibility.</p>
   <form method="post" action="/pull-defaults">
-    <label>Limit per company</label><input name="limit" value="12">
+    <label>Limit per company</label><input name="limit" value="50">
     <p><button>Pull default public feeds</button></p>
   </form>
 </section>
@@ -829,7 +833,7 @@ class App(BaseHTTPRequestHandler):
     <p class="muted">Runs public ATS pulls, filters for US/remote eligibility, scores roles, dedupes, auto-tailors resumes, and records every run.</p>
   </div>
   <form method="post" action="/agent-run" class="row">
-    <input name="limit" value="12" style="max-width:80px">
+    <input name="limit" value="50" style="max-width:80px">
     <button>Run now</button>
   </form>
 </section>
@@ -838,7 +842,7 @@ class App(BaseHTTPRequestHandler):
   <div class="panel agent-card">
     <h2>Routine Mode</h2>
     <p>For routine scraping, run this in a terminal and leave it open:</p>
-    <pre>python3 -m rolefit_platform scrape-agent --interval-minutes 360 --limit 12</pre>
+    <pre>python3 -m rolefit_platform scrape-agent --interval-minutes 360 --limit 50</pre>
     <p class="muted">Use <code>--cycles 1</code> for one scheduled pass or <code>--once</code> for an immediate run. The UI reads the same run history.</p>
   </div>
   <div class="panel">
@@ -946,7 +950,7 @@ class App(BaseHTTPRequestHandler):
 <aside class="panel">
   <h1>Add Interview</h1>
   <form method="post" action="/add-interview">
-    <label>Company</label><input name="company" placeholder="Example Cloud Co.">
+    <label>Company</label><input name="company" placeholder="Cloud Platform Co.">
     <label>Role</label><input name="role" placeholder="Systems Engineer II">
     <label>Stage</label><input name="stage" value="phone screen">
     <label>Scheduled at</label><input name="scheduled_at" type="datetime-local">
@@ -1017,7 +1021,7 @@ class App(BaseHTTPRequestHandler):
       <label>Status</label><select name="status">
         """ + status_options(job.get("status")) + """
       </select>
-      <label>Contact</label><input name="referral_contact" value=\"""" + esc(job.get("contact")) + """\">
+      <label>Contact</label><input name="contact" value=\"""" + esc(job.get("contact")) + """\">
       <label>Notes</label><textarea name="notes">""" + esc(job.get("notes")) + """</textarea>
       <p><button>Update</button></p>
     </form>
@@ -1039,7 +1043,7 @@ class App(BaseHTTPRequestHandler):
     </form>
   </div>
   <div class="panel">
-    <h2>Referral Message</h2>
+    <h2>Contact Message</h2>
     <pre>""" + esc(message) + """</pre>
   </div>
 </aside>
