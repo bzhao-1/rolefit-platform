@@ -39,6 +39,116 @@ def ensure_db_dir(path):
         os.makedirs(directory)
 
 
+TECH_KEYWORDS = [
+    "Python", "Java", "Go", "C++", "Kubernetes", "Docker", "Terraform", "Linux",
+    "AWS", "Azure", "GCP", "PostgreSQL", "Kafka", "Spark", "CI/CD", "PyTest",
+    "REST", "GraphQL", "SQL", "Redis", "Datadog", "Prometheus",
+]
+
+SPECIALTY_KEYWORDS = [
+    ("AI Infra", ["ai infrastructure", "ml infrastructure", "gpu", "model", "inference", "data pipeline"]),
+    ("Backend", ["backend", "api", "microservice", "service", "java", "python", "go"]),
+    ("Platform", ["platform", "infrastructure", "cloud", "kubernetes", "developer infrastructure"]),
+    ("Reliability", ["sre", "reliability", "observability", "monitoring", "incident", "on-call"]),
+    ("Release", ["release", "deployment", "ci/cd", "build", "validation", "test automation"]),
+    ("Security", ["security", "compliance", "vulnerability", "secure coding"]),
+]
+
+
+def row_text(row):
+    return " ".join([row.get("role") or "", row.get("company") or "", row.get("location") or "", row.get("description") or "", row.get("notes") or ""])
+
+
+def detect_level(row):
+    text = row_text(row).lower()
+    role = (row.get("role") or "").lower()
+    if any(term in role for term in ["staff", "principal"]):
+        return "Staff+"
+    if any(term in role for term in ["senior", "sr."]):
+        return "Senior"
+    if any(term in text for term in ["new grad", "university graduate", "entry level", "0 years"]):
+        return "Entry"
+    if any(term in text for term in ["1+ years", "2 years", "software engineer ii", "engineer ii", "mid level", "mid-level"]):
+        return "Mid"
+    return "Any"
+
+
+def detect_specialty(row):
+    text = row_text(row).lower()
+    hits = []
+    for label, terms in SPECIALTY_KEYWORDS:
+        if any(term in text for term in terms):
+            hits.append(label)
+    return hits[:3] or ["Software"]
+
+
+def detect_tech(row):
+    text = row_text(row).lower()
+    hits = []
+    aliases = {"C++": ["c++", "c/c++"], "CI/CD": ["ci/cd", "cicd"], "GCP": ["gcp", "google cloud"], "REST": ["rest api", "restful"]}
+    for tech in TECH_KEYWORDS:
+        checks = aliases.get(tech, [tech.lower()])
+        if any(item in text for item in checks):
+            hits.append(tech)
+    return hits[:8]
+
+
+def detect_salary(row):
+    text = row_text(row)
+    match = None
+    for pattern in [r"\$[0-9]{2,3}k\s*-\s*\$[0-9]{2,3}k", r"\$[0-9,]{5,}\s*-\s*\$[0-9,]{5,}"]:
+        match = re_search(pattern, text)
+        if match:
+            break
+    return match or "Salary not listed"
+
+
+def re_search(pattern, text):
+    import re
+    found = re.search(pattern, text or "", re.I)
+    return found.group(0) if found else None
+
+
+def compact_summary(row):
+    text = row.get("description") or row.get("notes") or ""
+    text = " ".join(str(text).split())
+    sentences = [item.strip() for item in text.split(".") if item.strip()]
+    for sentence in sentences:
+        if 80 <= len(sentence) <= 220 and not sentence.lower().startswith(("the application", "job posting", "message to applicants")):
+            return sentence[:240]
+    return text[:240] + ("..." if len(text) > 240 else "")
+
+
+def filter_jobs(rows, params):
+    query = ((params.get("q") or [""])[0]).strip().lower()
+    location = ((params.get("location") or [""])[0]).strip().lower()
+    level = ((params.get("level") or [""])[0]).strip()
+    specialty = ((params.get("specialty") or [""])[0]).strip()
+    tech = ((params.get("tech") or [""])[0]).strip().lower()
+    status = ((params.get("status") or [""])[0]).strip()
+    min_score_raw = ((params.get("min_score") or [""])[0]).strip()
+    min_score = int(min_score_raw) if min_score_raw.isdigit() else 0
+    filtered = []
+    for row in rows:
+        text = row_text(row).lower()
+        if query and query not in text:
+            continue
+        if location and location not in (row.get("location") or "").lower() and location not in text:
+            continue
+        if level and level != "Any" and detect_level(row) != level:
+            continue
+        if specialty and specialty not in detect_specialty(row):
+            continue
+        if tech and tech not in [item.lower() for item in detect_tech(row)]:
+            continue
+        if status and row.get("status") != status:
+            continue
+        if (row.get("score") or 0) < min_score:
+            continue
+        filtered.append(row)
+    return filtered
+
+
 def layout(title, body):
     return """<!doctype html>
 <html>
@@ -47,14 +157,14 @@ def layout(title, body):
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>""" + esc(title) + """</title>
   <style>
-    :root { color-scheme: light; --ink:#202124; --muted:#667085; --line:#d7d2c8; --bg:#f7f3ea; --panel:#fffdf8; --soft:#eef1f4; --accent:#28536b; --accent2:#c47f2c; --good:#287a4f; --warn:#a15c14; --bad:#b42318; }
+    :root { color-scheme: light; --ink:#17202a; --muted:#64748b; --line:#d8dee8; --bg:#f4f7fb; --panel:#ffffff; --soft:#eef3f8; --accent:#1769aa; --accent2:#18a999; --good:#16834a; --warn:#b7791f; --bad:#c2410c; }
     * { box-sizing:border-box; }
-    body { margin:0; font:14px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; color:var(--ink); background:linear-gradient(180deg,#fbf8f1 0,#f7f3ea 240px); }
-    header { position:sticky; top:0; z-index:1; background:rgba(255,253,248,.94); border-bottom:1px solid var(--line); backdrop-filter:blur(8px); }
+    body { margin:0; font:14px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; color:var(--ink); background:linear-gradient(180deg,#f9fbff 0,#eef4f9 320px); }
+    header { position:sticky; top:0; z-index:3; background:rgba(255,255,255,.94); border-bottom:1px solid var(--line); backdrop-filter:blur(8px); }
     nav { max-width:1180px; margin:0 auto; padding:12px 18px; display:flex; align-items:center; gap:14px; }
     nav a { color:var(--ink); text-decoration:none; font-weight:650; }
     nav .brand { margin-right:auto; font-size:17px; }
-    main { max-width:1280px; margin:0 auto; padding:18px; }
+    main { max-width:1320px; margin:0 auto; padding:18px; }
     .hero { display:grid; grid-template-columns:1fr auto; gap:16px; align-items:end; margin-bottom:16px; }
     .hero h1 { font-size:28px; margin-bottom:4px; }
     .grid { display:grid; grid-template-columns:minmax(0,1.3fr) minmax(340px,.7fr); gap:16px; align-items:start; }
@@ -68,34 +178,45 @@ def layout(title, body):
     h1 { font-size:22px; }
     h2 { font-size:16px; }
     label { display:block; font-weight:650; margin:10px 0 4px; }
-    input, textarea, select { width:100%; border:1px solid var(--line); border-radius:6px; padding:9px 10px; font:inherit; background:#fffdf8; color:var(--ink); }
+    input, textarea, select { width:100%; border:1px solid var(--line); border-radius:6px; padding:9px 10px; font:inherit; background:#fff; color:var(--ink); }
     textarea { min-height:150px; resize:vertical; }
     button, .button { border:0; border-radius:6px; background:var(--accent); color:#fff; padding:9px 12px; font-weight:700; cursor:pointer; text-decoration:none; display:inline-block; }
     .secondary { background:#3e4c59; }
-    .ghost { background:#eee8dd; color:var(--ink); }
+    .ghost { background:#e9f0f7; color:var(--ink); }
     .row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
     .muted { color:var(--muted); }
-    .job { padding:12px; margin-bottom:10px; }
-    .job-title { font-weight:750; font-size:15px; color:var(--ink); text-decoration:none; }
-    .pill { display:inline-flex; align-items:center; min-height:24px; padding:2px 8px; border-radius:999px; background:#eee8dd; margin:4px 4px 0 0; font-size:12px; font-weight:650; }
+    .job { padding:14px; margin-bottom:10px; box-shadow:0 1px 2px rgba(15,23,42,.04); }
+    .job:hover { border-color:#a8c3dc; box-shadow:0 8px 22px rgba(15,23,42,.07); }
+    .job-title { font-weight:760; font-size:16px; color:var(--ink); text-decoration:none; }
+    .pill { display:inline-flex; align-items:center; min-height:24px; padding:2px 8px; border-radius:999px; background:#e9f0f7; margin:4px 4px 0 0; font-size:12px; font-weight:650; }
+    .tag { background:#eefaf7; color:#0f766e; }
+    .verified { color:var(--good); font-weight:760; }
+    .feed-shell { display:grid; grid-template-columns:280px minmax(0,1fr); gap:16px; align-items:start; }
+    .filters { position:sticky; top:64px; }
+    .feed-head { display:flex; justify-content:space-between; gap:12px; align-items:end; margin-bottom:12px; }
+    .feed-list { display:grid; gap:10px; }
+    .job-top { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:12px; align-items:start; }
+    .company-mark { width:38px; height:38px; border-radius:8px; display:inline-grid; place-items:center; background:linear-gradient(135deg,#1769aa,#18a999); color:white; font-weight:800; }
+    .job-actions { display:flex; gap:8px; flex-wrap:wrap; margin-top:10px; }
+    .empty { padding:28px; text-align:center; }
     .stage { border-left:4px solid var(--accent); }
     .stage h2 { display:flex; justify-content:space-between; gap:8px; align-items:center; }
     .stage-count { color:var(--muted); font-size:12px; }
-    .agent-card { background:linear-gradient(135deg,#f2eadc,#edf3f6); border-color:#cdbfa9; }
+    .agent-card { background:linear-gradient(135deg,#eaf6ff,#eefaf7); border-color:#bdd7ea; }
     .agent-log { max-height:220px; overflow:auto; }
     .split { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
     .score { color:var(--good); }
     .warn { color:var(--warn); }
     .bad { color:var(--bad); }
-    pre { white-space:pre-wrap; background:#f4efe5; border:1px solid var(--line); border-radius:8px; padding:12px; overflow:auto; }
+    pre { white-space:pre-wrap; background:#edf4fa; border:1px solid var(--line); border-radius:8px; padding:12px; overflow:auto; }
     ul { margin-top:6px; padding-left:20px; }
-    @media (max-width: 900px) { .grid, .stats, .three, .hero, .split { grid-template-columns:1fr; } nav { overflow:auto; } }
+    @media (max-width: 900px) { .grid, .stats, .three, .hero, .split, .feed-shell, .job-top { grid-template-columns:1fr; } nav { overflow:auto; } .filters { position:static; } }
   </style>
 </head>
 <body>
   <header><nav>
     <a class="brand" href="/">rolefit-platform</a>
-    <a href="/">Dashboard</a>
+    <a href="/">Jobs</a>
     <a href="/add">Add</a>
     <a href="/pull">Pull</a>
     <a href="/agent">Agent</a>
@@ -166,7 +287,7 @@ class App(BaseHTTPRequestHandler):
         elif parsed.path == "/add-url":
             self.add_from_url(data)
         elif parsed.path == "/update-status":
-            update_status(self.db_path, int(data.get("job_id")), data.get("status"), data.get("notes"), data.get("contact"))
+            update_status(self.db_path, int(data.get("job_id")), data.get("status"), data.get("notes"), data.get("referral_contact"))
             self.redirect("/job?id=" + urllib.parse.quote(data.get("job_id", "")))
         elif parsed.path == "/add-interview":
             self.add_interview(data)
@@ -236,7 +357,7 @@ class App(BaseHTTPRequestHandler):
             "score": classified["score"]["score"],
             "infrastructure_alignment_score": classified["alignment"]["similarity_score"],
             "apply_decision": classified["decision"],
-            "contact": data.get("contact", ""),
+            "referral_contact": data.get("referral_contact", ""),
             "status": data.get("status", "saved"),
             "notes": data.get("notes", "") + " " + classified["reasoning"],
         }
@@ -271,7 +392,8 @@ class App(BaseHTTPRequestHandler):
         self.add_from_text(data)
 
     def dashboard(self, params):
-        rows = list_jobs(self.db_path, 80)
+        rows = list_jobs(self.db_path, 250)
+        filtered_rows = filter_jobs(rows, params)
         interviews = list_interviews(self.db_path, 5, "scheduled")
         runs = recent_agent_runs(self.db_path, 3)
         summary = stats(self.db_path)
@@ -280,12 +402,12 @@ class App(BaseHTTPRequestHandler):
         body = pulled + cleaned + """
 <section class="hero">
   <div>
-    <h1>Job Search Cockpit</h1>
-    <p class="muted">Agent-assisted sourcing, scoring, resume tailoring, interviews, and follow-through in one local workflow.</p>
+    <h1>Browse Scored Engineering Roles</h1>
+    <p class="muted">Verified ATS ingestion, deterministic filters, resume match scoring, tailoring automation, and tracker actions in one local workflow.</p>
   </div>
   <form method="post" action="/agent-run" class="row">
     <input name="limit" value="12" style="max-width:80px">
-    <button>Run scraper agent</button>
+    <button>Refresh jobs</button>
   </form>
 </section>
 <div class="stats">
@@ -294,50 +416,61 @@ class App(BaseHTTPRequestHandler):
   <div class="stat"><span class="muted">Applied</span><b>""" + str(summary["by_status"].get("applied", 0)) + """</b></div>
   <div class="stat"><span class="muted">Scheduled</span><b>""" + str(summary["scheduled_interviews"]) + """</b></div>
 </div>
-<div class="three">
-  <div class="panel agent-card">
+<div class="feed-shell">
+  <aside class="panel filters">
+    <h2>Filters</h2>
+    <form method="get" action="/">
+      <label>Search</label><input name="q" value=\"""" + esc((params.get("q") or [""])[0]) + """\" placeholder="backend, kubernetes, ci/cd">
+      <label>Location</label><input name="location" value=\"""" + esc((params.get("location") or [""])[0]) + """\" placeholder="United States, Austin, Remote">
+      <label>Minimum score</label><select name="min_score">
+        """ + self.option_html(["", "55", "65", "75", "85"], (params.get("min_score") or [""])[0], "Any") + """
+      </select>
+      <label>Level</label><select name="level">
+        """ + self.option_html(["", "Entry", "Mid", "Senior", "Staff+"], (params.get("level") or [""])[0], "Any") + """
+      </select>
+      <label>Specialty</label><select name="specialty">
+        """ + self.option_html(["", "Backend", "Platform", "AI Infra", "Reliability", "Release", "Security"], (params.get("specialty") or [""])[0], "Any") + """
+      </select>
+      <label>Tech Stack</label><select name="tech">
+        """ + self.option_html(["", "Python", "Java", "Go", "C++", "Kubernetes", "Docker", "Linux", "CI/CD", "PyTest"], (params.get("tech") or [""])[0], "Any") + """
+      </select>
+      <label>Status</label><select name="status">
+        """ + self.option_html(["", "saved", "pulled", "referral requested", "applied", "interview"], (params.get("status") or [""])[0], "Any") + """
+      </select>
+      <p><button>Apply filters</button></p>
+      <p><a class="button ghost" href="/">Reset</a></p>
+    </form>
+    <hr>
     <h2>Agent</h2>
     """ + self.agent_status_html(runs) + """
-    <p><a class="button ghost" href="/agent">Tune sources</a></p>
-  </div>
-  <div class="panel">
-    <h2>Next Best Action</h2>
-    """ + self.next_action_html(rows, interviews) + """
-  </div>
-  <div class="panel">
-    <h2>Upcoming</h2>
-    """ + self.interviews_compact_html(interviews) + """
-  </div>
-</div>
-<div class="grid">
-<section>
-  <div class="panel row">
-    <a class="button" href="/add">Add job</a>
-    <a class="button secondary" href="/pull">Pull public feeds</a>
-    <a class="button ghost" href="/interviews">Interviews</a>
-    <a class="button ghost" href="/export">Export CSV</a>
-    <a class="button ghost" href="/export-resumes">Export resumes</a>
-  </div>
-""" + self.pipeline_html(rows) + """
-</section>
-<aside>
-  <div class="panel">
-    <h2>Fast Workflow</h2>
-    <p class="muted">Review the agent discoveries, move strong matches to referral or applied, then prep from the job page. Location rule: US roles and global/anywhere remote only.</p>
-    <div class="row">
-      <a class="button" href="/matches">Resume matches</a>
-      <a class="button ghost" href="/interviews">Interview tracker</a>
-      <a class="button ghost" href="/export-resumes">Export resumes</a>
+    <p><a class="button ghost" href="/agent">Sources</a></p>
+  </aside>
+  <section>
+    <div class="feed-head">
+      <div>
+        <h2>""" + str(len(filtered_rows)) + """ Matching Jobs</h2>
+        <p class="muted">Direct-from-source postings, ranked by role fit and filtered for US or eligible remote work.</p>
+      </div>
+      <div class="row">
+        <a class="button" href="/add">Add URL</a>
+        <a class="button secondary" href="/pull">Pull feeds</a>
+        <a class="button ghost" href="/matches">Resume matches</a>
+      </div>
     </div>
-  </div>
-  <div class="panel">
-    <h2>Manual Search Links</h2>
-    <p class="muted">These companies use more guarded career sites, so open them and paste URLs back here.</p>
-""" + "".join("<p><a href='" + esc(url) + "' target='_blank'>" + esc(company) + "</a></p>" for company, url in SAVED_SEARCH_LINKS) + """
-  </div>
-</aside>
+    <div class="feed-list">
+      """ + self.job_feed_html(filtered_rows[:80]) + """
+    </div>
+  </section>
 </div>"""
         self.send_html(body)
+
+    def option_html(self, values, current, blank_label):
+        parts = []
+        for value in values:
+            label = blank_label if value == "" else value
+            selected = " selected" if value == current else ""
+            parts.append("<option value=\"" + esc(value) + "\"" + selected + ">" + esc(label) + "</option>")
+        return "".join(parts)
 
     def jobs_html(self, rows):
         if not rows:
@@ -357,6 +490,51 @@ class App(BaseHTTPRequestHandler):
   <span class="pill">""" + esc(row.get("status")) + """</span>
 </article>""")
         return "\n".join(parts)
+
+    def job_feed_html(self, rows):
+        if not rows:
+            return "<div class='panel empty'><h2>No matching jobs</h2><p class='muted'>Relax the filters or run the scraper agent.</p></div>"
+        parts = []
+        for row in rows:
+            match = resume_match(row_text(row))
+            score = row.get("score") or 0
+            score_class = "score" if score >= 75 else "warn" if score >= 55 else "bad"
+            tech = detect_tech(row)
+            specialty = detect_specialty(row)
+            company = row.get("company") or "?"
+            initials = "".join([part[:1] for part in company.split()[:2]]).upper() or "?"
+            apply = "<a class='button ghost' href='" + esc(row.get("link")) + "' target='_blank'>Apply</a>" if row.get("link") else ""
+            parts.append("""
+<article class="job">
+  <div class="job-top">
+    <div class="row" style="align-items:flex-start">
+      <span class="company-mark">""" + esc(initials) + """</span>
+      <div>
+        <a class="job-title" href="/job?id=""" + str(row["id"]) + """">""" + esc(row.get("role") or "Untitled role") + """</a>
+        <div class="muted">""" + esc(company) + """ · """ + esc(row.get("location")) + """ <span class="verified">verified source</span></div>
+      </div>
+    </div>
+    <div>
+      <span class="pill """ + score_class + """">Fit """ + str(score) + """</span>
+      <span class="pill">Resume """ + str(match["resume_match_score"]) + """</span>
+    </div>
+  </div>
+  <p>""" + esc(compact_summary(row)) + """</p>
+  <div>
+    <span class="pill">""" + esc(detect_level(row)) + """</span>
+    <span class="pill">""" + esc(detect_salary(row)) + """</span>
+    <span class="pill">""" + esc(row.get("apply_decision")) + """</span>
+    <span class="pill">""" + esc(row.get("status")) + """</span>
+    """ + "".join("<span class='pill tag'>" + esc(item) + "</span>" for item in specialty) + """
+    """ + "".join("<span class='pill'>" + esc(item) + "</span>" for item in tech[:5]) + """
+  </div>
+  <div class="job-actions">
+    <a class="button" href="/job?id=""" + str(row["id"]) + """">Review</a>
+    """ + apply + """
+    <a class="button ghost" href="/export-resumes?limit=25">Export resumes</a>
+  </div>
+</article>""")
+        return "".join(parts)
 
     def pipeline_html(self, rows):
         groups = [
@@ -417,7 +595,7 @@ class App(BaseHTTPRequestHandler):
     <label>Location</label><input name="location" placeholder="Santa Clara, CA / Remote">
     <label>Link</label><input name="link" placeholder="https://...">
     <label>Description</label><textarea name="description" placeholder="Paste the job description here"></textarea>
-    <label>Referral contact</label><input name="contact" placeholder="Alex at NVIDIA">
+    <label>Referral contact</label><input name="referral_contact" placeholder="Alex at NVIDIA">
     <label>Notes</label><input name="notes" placeholder="Ask for team guidance first">
     <input type="hidden" name="status" value="saved">
     <p><button>Score and save</button></p>
@@ -442,7 +620,7 @@ class App(BaseHTTPRequestHandler):
 <div class="grid">
 <section class="panel">
   <h1>One-click Pull</h1>
-  <p class="muted">Pulls public Greenhouse, Lever, Eightfold, Workday CXS, Ashby, and careers-search HTML sources. Jobs are scored, deduped, filtered, and auto-tailored.</p>
+  <p class="muted">Pulls public Greenhouse, Lever, Eightfold, Workday CXS, Ashby, and Apple careers search sources. Jobs are scored, deduped, filtered, and auto-tailored.</p>
   <p class="muted">Non-US onsite roles and country-restricted non-US remote roles are filtered out unless the posting explicitly includes US eligibility.</p>
   <form method="post" action="/pull-defaults">
     <label>Limit per company</label><input name="limit" value="12">
@@ -483,10 +661,10 @@ class App(BaseHTTPRequestHandler):
   </form>
   <hr>
   <form method="post" action="/pull-apple">
-    <label>Careers search URL</label><input name="url" value="https://jobs.apple.com/en-us/search?sort=relevance&amp;search=software%20engineer&amp;location=united-states-USA">
+    <label>Apple careers search URL</label><input name="url" value="https://jobs.apple.com/en-us/search?sort=relevance&amp;search=software%20engineer&amp;location=united-states-USA">
     <label>Company name</label><input name="company" value="Apple">
     <label>Limit</label><input name="limit" value="20">
-    <p><button class="secondary">Pull HTML Search</button></p>
+    <p><button class="secondary">Pull Apple</button></p>
   </form>
 </aside>
 </div>"""
@@ -632,7 +810,7 @@ class App(BaseHTTPRequestHandler):
   <h1>Add Interview</h1>
   <form method="post" action="/add-interview">
     <label>Company</label><input name="company" placeholder="Example Cloud Co.">
-    <label>Role</label><input name="role" placeholder="Software Engineer II">
+    <label>Role</label><input name="role" placeholder="Systems Engineer II">
     <label>Stage</label><input name="stage" value="phone screen">
     <label>Scheduled at</label><input name="scheduled_at" type="datetime-local">
     <label>Timezone</label><input name="timezone" value="America/Chicago">
@@ -685,7 +863,7 @@ class App(BaseHTTPRequestHandler):
     <ul>""" + "".join("<li>" + esc(item) + "</li>" for item in tailored["rewritten_bullets"]) + """</ul>
     <p><b>Position as:</b> """ + esc(tailored["position_as"]) + """</p>
     <p><b>Keywords:</b> """ + esc(", ".join(tailored["keywords_to_inject"])) + """</p>
-    <p><b>Emphasize:</b> """ + esc(", ".join(tailored["experience_to_emphasize"])) + """</p>
+    <p><b>Emphasize:</b> """ + esc(", ".join(tailored["oracle_work_to_emphasize"])) + """</p>
   </div>
   <div class="panel">
     <h2>Interview Prep</h2>
@@ -702,7 +880,7 @@ class App(BaseHTTPRequestHandler):
       <label>Status</label><select name="status">
         """ + status_options(job.get("status")) + """
       </select>
-      <label>Referral contact</label><input name="contact" value=\"""" + esc(job.get("contact")) + """\">
+      <label>Referral contact</label><input name="referral_contact" value=\"""" + esc(job.get("referral_contact")) + """\">
       <label>Notes</label><textarea name="notes">""" + esc(job.get("notes")) + """</textarea>
       <p><button>Update</button></p>
     </form>
@@ -716,7 +894,7 @@ class App(BaseHTTPRequestHandler):
       <label>Scheduled at</label><input name="scheduled_at" type="datetime-local">
       <label>Timezone</label><input name="timezone" value="America/Chicago">
       <label>Format</label><input name="format" value="phone">
-      <label>Contact</label><input name="contact" value=\"""" + esc(job.get("contact")) + """\">
+      <label>Contact</label><input name="contact" value=\"""" + esc(job.get("referral_contact")) + """\">
       <label>Prep focus</label><input name="prep_focus" placeholder="Recruiter screen, project story, role fit">
       <label>Notes</label><textarea name="notes"></textarea>
       <input type="hidden" name="status" value="scheduled">
