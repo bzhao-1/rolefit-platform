@@ -229,8 +229,11 @@ def layout(title, body):
     .agent-card { background:linear-gradient(135deg,#102337,#0f2e2b); border-color:#24465f; }
     .status-board { display:grid; grid-template-columns:repeat(6, minmax(160px,1fr)); gap:10px; margin-bottom:16px; }
     .status-col { background:rgba(17,26,36,.82); border:1px solid var(--line); border-radius:8px; padding:10px; min-height:120px; }
+    .status-col.drag-over { border-color:var(--accent); box-shadow:0 0 0 2px rgba(56,189,248,.22) inset; }
     .status-col h2 { display:flex; justify-content:space-between; gap:8px; font-size:14px; }
-    .mini-job { display:block; padding:8px; margin-top:8px; border-radius:6px; background:#0d1621; color:var(--ink); text-decoration:none; border:1px solid #1e2c3c; }
+    .mini-job { display:block; padding:8px; margin-top:8px; border-radius:6px; background:#0d1621; color:var(--ink); text-decoration:none; border:1px solid #1e2c3c; cursor:grab; }
+    .mini-job:active { cursor:grabbing; }
+    .mini-job.dragging { opacity:.55; }
     .mini-job span { display:block; font-size:12px; color:var(--muted); margin-top:2px; }
     .agent-log { max-height:220px; overflow:auto; }
     .split { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
@@ -255,6 +258,47 @@ def layout(title, body):
     <a href="/export">Export</a>
   </nav></header>
   <main>""" + body + """</main>
+  <script>
+    let draggedJob = null;
+    document.addEventListener("dragstart", event => {
+      const card = event.target.closest("[data-job-id]");
+      if (!card) return;
+      draggedJob = card;
+      card.classList.add("dragging");
+      event.dataTransfer.effectAllowed = "move";
+      event.dataTransfer.setData("text/plain", card.dataset.jobId);
+    });
+    document.addEventListener("dragend", () => {
+      document.querySelectorAll(".dragging").forEach(item => item.classList.remove("dragging"));
+      document.querySelectorAll(".drag-over").forEach(item => item.classList.remove("drag-over"));
+      draggedJob = null;
+    });
+    document.addEventListener("dragover", event => {
+      const column = event.target.closest("[data-status]");
+      if (!column || !draggedJob) return;
+      event.preventDefault();
+      column.classList.add("drag-over");
+    });
+    document.addEventListener("dragleave", event => {
+      const column = event.target.closest("[data-status]");
+      if (column && !column.contains(event.relatedTarget)) column.classList.remove("drag-over");
+    });
+    document.addEventListener("drop", async event => {
+      const column = event.target.closest("[data-status]");
+      if (!column || !draggedJob) return;
+      event.preventDefault();
+      column.classList.remove("drag-over");
+      const body = new URLSearchParams({ job_id: draggedJob.dataset.jobId, status: column.dataset.status });
+      const response = await fetch("/drag-status", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body });
+      if (response.ok) {
+        const empty = column.querySelector(".empty-status");
+        if (empty) empty.remove();
+        column.appendChild(draggedJob);
+        draggedJob.dataset.status = column.dataset.status;
+        window.location.reload();
+      }
+    });
+  </script>
 </body>
 </html>"""
 
@@ -321,6 +365,14 @@ class App(BaseHTTPRequestHandler):
         elif parsed.path == "/update-status":
             update_status(self.db_path, int(data.get("job_id")), data.get("status"), data.get("notes"), data.get("referral_contact"))
             self.redirect("/job?id=" + urllib.parse.quote(data.get("job_id", "")))
+        elif parsed.path == "/drag-status":
+            ok = update_status(self.db_path, int(data.get("job_id")), data.get("status"))
+            raw = json.dumps({"updated": bool(ok)}).encode("utf-8")
+            self.send_response(200 if ok else 404)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(raw)))
+            self.end_headers()
+            self.wfile.write(raw)
         elif parsed.path == "/add-interview":
             self.add_interview(data)
         elif parsed.path == "/update-interview":
@@ -512,12 +564,12 @@ class App(BaseHTTPRequestHandler):
         parts = ["<section class='status-board'>"]
         for status, label in columns:
             selected = [row for row in rows if row.get("status") == status][:4]
-            parts.append("<div class='status-col'><h2>" + esc(label) + "<span class='stage-count'>" + str(len([row for row in rows if row.get("status") == status])) + "</span></h2>")
+            parts.append("<div class='status-col' data-status='" + esc(status) + "'><h2>" + esc(label) + "<span class='stage-count'>" + str(len([row for row in rows if row.get("status") == status])) + "</span></h2>")
             if selected:
                 for row in selected:
-                    parts.append("<a class='mini-job' href='/job?id=" + str(row.get("id")) + "'>" + esc(row.get("company")) + " · " + esc(row.get("role")) + "<span>" + esc(posted_label(row)) + " · Fit " + str(row.get("score") or 0) + "</span></a>")
+                    parts.append("<a class='mini-job' draggable='true' data-job-id='" + str(row.get("id")) + "' data-status='" + esc(status) + "' href='/job?id=" + str(row.get("id")) + "'>" + esc(row.get("company")) + " · " + esc(row.get("role")) + "<span>" + esc(posted_label(row)) + " · Fit " + str(row.get("score") or 0) + "</span></a>")
             else:
-                parts.append("<p class='muted'>Empty</p>")
+                parts.append("<p class='muted empty-status'>Empty</p>")
             parts.append("</div>")
         parts.append("</section>")
         return "".join(parts)
@@ -680,7 +732,7 @@ class App(BaseHTTPRequestHandler):
     <label>Link</label><input name="link" placeholder="https://...">
     <label>Posted date</label><input name="posted_at" placeholder="May 30, 2026 / Posted 3 Days Ago">
     <label>Description</label><textarea name="description" placeholder="Paste the job description here"></textarea>
-    <label>Contact</label><input name="contact" placeholder="Recruiter or hiring contact">
+    <label>Referral contact</label><input name="contact" placeholder="Recruiter or hiring contact">
     <label>Notes</label><input name="notes" placeholder="Ask for team guidance first">
     <input type="hidden" name="status" value="saved">
     <p><button>Score and save</button></p>
