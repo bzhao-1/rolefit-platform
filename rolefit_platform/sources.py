@@ -185,6 +185,8 @@ def greenhouse_jobs(board, company, limit=25):
             "location": display_location(title, location, text),
             "link": item.get("absolute_url"),
             "description": text,
+            "posted_at": item.get("updated_at"),
+            "source": "Greenhouse",
             "notes": "Pulled from Greenhouse board: " + board,
         })
         if len(jobs) >= limit:
@@ -210,6 +212,8 @@ def lever_jobs(slug, company, limit=25):
             "location": display_location(title, location, text),
             "link": item.get("hostedUrl"),
             "description": text,
+            "posted_at": str(item.get("createdAt") or ""),
+            "source": "Lever",
             "notes": "Pulled from Lever slug: " + slug,
         })
         if len(jobs) >= limit:
@@ -251,6 +255,8 @@ def eightfold_jobs(url, company, limit=25):
             "location": display_location(title, location, text),
             "link": link,
             "description": text,
+            "posted_at": item.get("posted_date") or item.get("date_posted") or item.get("posted_on"),
+            "source": "Eightfold",
             "notes": "Pulled from Eightfold careers page: " + url,
         })
         if len(jobs) >= limit:
@@ -301,6 +307,8 @@ def workday_jobs(base_url, tenant, site, company, search_text="software engineer
             "location": display_location(title, location, text),
             "link": link,
             "description": text,
+            "posted_at": info.get("postedOn") or item.get("postedOn"),
+            "source": "Workday",
             "notes": "Pulled from Workday CXS site: " + site,
         })
         if len(jobs) >= limit:
@@ -328,6 +336,8 @@ def ashby_jobs(board, company, limit=25):
             "location": display_location(title, location, text),
             "link": item.get("jobUrl"),
             "description": text,
+            "posted_at": item.get("publishedAt"),
+            "source": "Ashby",
             "notes": "Pulled from Ashby board: " + board,
         })
         if len(jobs) >= limit:
@@ -378,6 +388,8 @@ def apple_jobs(search_url, company="Apple", limit=25):
             "location": display_location(title, location, text),
             "link": link,
             "description": text,
+            "posted_at": item.get("posted"),
+            "source": "Apple Careers",
             "notes": "Pulled from Apple careers search: " + search_url,
         })
         if len(jobs) >= limit:

@@ -4,6 +4,7 @@ import os
 import urllib.parse
 import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from datetime import datetime
 
 from rolefit_platform.auto_tailor import DEFAULT_RESUME_PATH, auto_tailor_job, auto_tailor_jobs
 from rolefit_platform.classifier import classify_job
@@ -57,6 +58,29 @@ SPECIALTY_KEYWORDS = [
 
 def row_text(row):
     return " ".join([row.get("role") or "", row.get("company") or "", row.get("location") or "", row.get("description") or "", row.get("notes") or ""])
+
+
+def display_date(value):
+    raw = str(value or "").strip()
+    if not raw:
+        return ""
+    if raw.isdigit() and len(raw) >= 10:
+        try:
+            return datetime.fromtimestamp(int(raw[:10])).strftime("%b %-d, %Y")
+        except Exception:
+            return raw
+    for fmt in ["%Y-%m-%dT%H:%M:%S.%fZ", "%Y-%m-%dT%H:%M:%SZ", "%Y-%m-%d %H:%M:%S"]:
+        try:
+            return datetime.strptime(raw, fmt).strftime("%b %-d, %Y")
+        except Exception:
+            pass
+    return raw.replace("Posted ", "")
+
+
+def posted_label(row):
+    if row.get("posted_at"):
+        return "Posted " + display_date(row.get("posted_at"))
+    return "Added " + display_date(row.get("created_at"))
 
 
 def detect_level(row):
@@ -157,10 +181,10 @@ def layout(title, body):
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>""" + esc(title) + """</title>
   <style>
-    :root { color-scheme: light; --ink:#17202a; --muted:#64748b; --line:#d8dee8; --bg:#f4f7fb; --panel:#ffffff; --soft:#eef3f8; --accent:#1769aa; --accent2:#18a999; --good:#16834a; --warn:#b7791f; --bad:#c2410c; }
+    :root { color-scheme: dark; --ink:#e6edf3; --muted:#8b98a9; --line:#243244; --bg:#0b1118; --panel:#111a24; --soft:#172333; --accent:#38bdf8; --accent2:#2dd4bf; --good:#4ade80; --warn:#fbbf24; --bad:#fb7185; }
     * { box-sizing:border-box; }
-    body { margin:0; font:14px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; color:var(--ink); background:linear-gradient(180deg,#f9fbff 0,#eef4f9 320px); }
-    header { position:sticky; top:0; z-index:3; background:rgba(255,255,255,.94); border-bottom:1px solid var(--line); backdrop-filter:blur(8px); }
+    body { margin:0; font:14px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; color:var(--ink); background:linear-gradient(180deg,#101827 0,#0b1118 340px); }
+    header { position:sticky; top:0; z-index:3; background:rgba(11,17,24,.92); border-bottom:1px solid var(--line); backdrop-filter:blur(10px); }
     nav { max-width:1180px; margin:0 auto; padding:12px 18px; display:flex; align-items:center; gap:14px; }
     nav a { color:var(--ink); text-decoration:none; font-weight:650; }
     nav .brand { margin-right:auto; font-size:17px; }
@@ -170,26 +194,26 @@ def layout(title, body):
     .grid { display:grid; grid-template-columns:minmax(0,1.3fr) minmax(340px,.7fr); gap:16px; align-items:start; }
     .three { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; }
     .stats { display:grid; grid-template-columns:repeat(4,1fr); gap:10px; margin-bottom:16px; }
-    .stat, .panel, .job { background:var(--panel); border:1px solid var(--line); border-radius:8px; }
-    .stat { padding:12px; box-shadow:0 1px 2px rgba(15,23,42,.04); }
+    .stat, .panel, .job { background:rgba(17,26,36,.96); border:1px solid var(--line); border-radius:8px; }
+    .stat { padding:12px; box-shadow:0 12px 30px rgba(0,0,0,.16); }
     .stat b { display:block; font-size:22px; }
     .panel { padding:14px; margin-bottom:16px; }
     h1, h2, h3 { margin:0 0 10px; letter-spacing:0; }
     h1 { font-size:22px; }
     h2 { font-size:16px; }
     label { display:block; font-weight:650; margin:10px 0 4px; }
-    input, textarea, select { width:100%; border:1px solid var(--line); border-radius:6px; padding:9px 10px; font:inherit; background:#fff; color:var(--ink); }
+    input, textarea, select { width:100%; border:1px solid var(--line); border-radius:6px; padding:9px 10px; font:inherit; background:#0d1621; color:var(--ink); }
     textarea { min-height:150px; resize:vertical; }
     button, .button { border:0; border-radius:6px; background:var(--accent); color:#fff; padding:9px 12px; font-weight:700; cursor:pointer; text-decoration:none; display:inline-block; }
-    .secondary { background:#3e4c59; }
-    .ghost { background:#e9f0f7; color:var(--ink); }
+    .secondary { background:#334155; }
+    .ghost { background:#1d2a3a; color:var(--ink); }
     .row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
     .muted { color:var(--muted); }
-    .job { padding:14px; margin-bottom:10px; box-shadow:0 1px 2px rgba(15,23,42,.04); }
-    .job:hover { border-color:#a8c3dc; box-shadow:0 8px 22px rgba(15,23,42,.07); }
+    .job { padding:14px; margin-bottom:10px; box-shadow:0 10px 24px rgba(0,0,0,.14); }
+    .job:hover { border-color:#365778; box-shadow:0 14px 30px rgba(0,0,0,.22); }
     .job-title { font-weight:760; font-size:16px; color:var(--ink); text-decoration:none; }
-    .pill { display:inline-flex; align-items:center; min-height:24px; padding:2px 8px; border-radius:999px; background:#e9f0f7; margin:4px 4px 0 0; font-size:12px; font-weight:650; }
-    .tag { background:#eefaf7; color:#0f766e; }
+    .pill { display:inline-flex; align-items:center; min-height:24px; padding:2px 8px; border-radius:999px; background:#1c2a3a; margin:4px 4px 0 0; font-size:12px; font-weight:650; }
+    .tag { background:#0f2e2b; color:#5eead4; }
     .verified { color:var(--good); font-weight:760; }
     .feed-shell { display:grid; grid-template-columns:280px minmax(0,1fr); gap:16px; align-items:start; }
     .filters { position:sticky; top:64px; }
@@ -202,21 +226,27 @@ def layout(title, body):
     .stage { border-left:4px solid var(--accent); }
     .stage h2 { display:flex; justify-content:space-between; gap:8px; align-items:center; }
     .stage-count { color:var(--muted); font-size:12px; }
-    .agent-card { background:linear-gradient(135deg,#eaf6ff,#eefaf7); border-color:#bdd7ea; }
+    .agent-card { background:linear-gradient(135deg,#102337,#0f2e2b); border-color:#24465f; }
+    .status-board { display:grid; grid-template-columns:repeat(6, minmax(160px,1fr)); gap:10px; margin-bottom:16px; }
+    .status-col { background:rgba(17,26,36,.82); border:1px solid var(--line); border-radius:8px; padding:10px; min-height:120px; }
+    .status-col h2 { display:flex; justify-content:space-between; gap:8px; font-size:14px; }
+    .mini-job { display:block; padding:8px; margin-top:8px; border-radius:6px; background:#0d1621; color:var(--ink); text-decoration:none; border:1px solid #1e2c3c; }
+    .mini-job span { display:block; font-size:12px; color:var(--muted); margin-top:2px; }
     .agent-log { max-height:220px; overflow:auto; }
     .split { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
     .score { color:var(--good); }
     .warn { color:var(--warn); }
     .bad { color:var(--bad); }
-    pre { white-space:pre-wrap; background:#edf4fa; border:1px solid var(--line); border-radius:8px; padding:12px; overflow:auto; }
+    pre { white-space:pre-wrap; background:#0d1621; border:1px solid var(--line); border-radius:8px; padding:12px; overflow:auto; }
     ul { margin-top:6px; padding-left:20px; }
-    @media (max-width: 900px) { .grid, .stats, .three, .hero, .split, .feed-shell, .job-top { grid-template-columns:1fr; } nav { overflow:auto; } .filters { position:static; } }
+    @media (max-width: 900px) { .grid, .stats, .three, .hero, .split, .feed-shell, .job-top, .status-board { grid-template-columns:1fr; } nav { overflow:auto; } .filters { position:static; } }
   </style>
 </head>
 <body>
   <header><nav>
     <a class="brand" href="/">rolefit-platform</a>
     <a href="/">Jobs</a>
+    <a href="/status">Status</a>
     <a href="/add">Add</a>
     <a href="/pull">Pull</a>
     <a href="/agent">Agent</a>
@@ -262,6 +292,8 @@ class App(BaseHTTPRequestHandler):
             self.pull_page(params)
         elif path == "/agent":
             self.agent_page(params)
+        elif path == "/status":
+            self.status_page(params)
         elif path == "/matches":
             self.matches_page(params)
         elif path == "/interviews":
@@ -357,8 +389,10 @@ class App(BaseHTTPRequestHandler):
             "score": classified["score"]["score"],
             "infrastructure_alignment_score": classified["alignment"]["similarity_score"],
             "apply_decision": classified["decision"],
-            "referral_contact": data.get("referral_contact", ""),
+            "contact": data.get("contact", ""),
             "status": data.get("status", "saved"),
+            "posted_at": data.get("posted_at", ""),
+            "source": "Manual",
             "notes": data.get("notes", "") + " " + classified["reasoning"],
         }
         job_id = add_job(self.db_path, job)
@@ -416,6 +450,7 @@ class App(BaseHTTPRequestHandler):
   <div class="stat"><span class="muted">Applied</span><b>""" + str(summary["by_status"].get("applied", 0)) + """</b></div>
   <div class="stat"><span class="muted">Scheduled</span><b>""" + str(summary["scheduled_interviews"]) + """</b></div>
 </div>
+""" + self.status_board_html(rows) + """
 <div class="feed-shell">
   <aside class="panel filters">
     <h2>Filters</h2>
@@ -435,7 +470,7 @@ class App(BaseHTTPRequestHandler):
         """ + self.option_html(["", "Python", "Java", "Go", "C++", "Kubernetes", "Docker", "Linux", "CI/CD", "PyTest"], (params.get("tech") or [""])[0], "Any") + """
       </select>
       <label>Status</label><select name="status">
-        """ + self.option_html(["", "saved", "pulled", "referral requested", "applied", "interview"], (params.get("status") or [""])[0], "Any") + """
+        """ + self.option_html(["", "saved", "pulled", "referral requested", "applied", "interview", "offer", "rejected", "skipped"], (params.get("status") or [""])[0], "Any") + """
       </select>
       <p><button>Apply filters</button></p>
       <p><a class="button ghost" href="/">Reset</a></p>
@@ -463,6 +498,54 @@ class App(BaseHTTPRequestHandler):
   </section>
 </div>"""
         self.send_html(body)
+
+    def status_board_html(self, rows):
+        columns = [
+            ("saved", "Saved"),
+            ("pulled", "New"),
+            ("referral requested", "Referral"),
+            ("applied", "Applied"),
+            ("interview", "Interviewing"),
+            ("offer", "Offer"),
+            ("rejected", "Rejected"),
+        ]
+        parts = ["<section class='status-board'>"]
+        for status, label in columns:
+            selected = [row for row in rows if row.get("status") == status][:4]
+            parts.append("<div class='status-col'><h2>" + esc(label) + "<span class='stage-count'>" + str(len([row for row in rows if row.get("status") == status])) + "</span></h2>")
+            if selected:
+                for row in selected:
+                    parts.append("<a class='mini-job' href='/job?id=" + str(row.get("id")) + "'>" + esc(row.get("company")) + " · " + esc(row.get("role")) + "<span>" + esc(posted_label(row)) + " · Fit " + str(row.get("score") or 0) + "</span></a>")
+            else:
+                parts.append("<p class='muted'>Empty</p>")
+            parts.append("</div>")
+        parts.append("</section>")
+        return "".join(parts)
+
+    def status_page(self, params):
+        rows = list_jobs(self.db_path, 500)
+        interviews = list_interviews(self.db_path, 50)
+        body = """
+<section class="hero">
+  <div>
+    <h1>Application Status</h1>
+    <p class="muted">A quick board for saved roles, referrals, applications, interviews, offers, and rejections.</p>
+  </div>
+  <a class="button" href="/">Back to job feed</a>
+</section>
+""" + self.status_board_html(rows) + """
+<div class="grid">
+  <section class="panel">
+    <h2>Interview Rounds</h2>
+    """ + self.interviews_compact_html(interviews) + """
+  </section>
+  <aside class="panel">
+    <h2>Status Shortcuts</h2>
+    <p class="muted">Open any job card to update status, referral contact, notes, or add an interview round.</p>
+    <p><a class="button ghost" href="/interviews">Open interview tracker</a></p>
+  </aside>
+</div>"""
+        self.send_html(body, "Application Status")
 
     def option_html(self, values, current, blank_label):
         parts = []
@@ -511,7 +594,7 @@ class App(BaseHTTPRequestHandler):
       <span class="company-mark">""" + esc(initials) + """</span>
       <div>
         <a class="job-title" href="/job?id=""" + str(row["id"]) + """">""" + esc(row.get("role") or "Untitled role") + """</a>
-        <div class="muted">""" + esc(company) + """ · """ + esc(row.get("location")) + """ <span class="verified">verified source</span></div>
+        <div class="muted">""" + esc(company) + """ · """ + esc(row.get("location")) + """ · """ + esc(posted_label(row)) + """ <span class="verified">""" + esc(row.get("source") or "verified source") + """</span></div>
       </div>
     </div>
     <div>
@@ -523,6 +606,7 @@ class App(BaseHTTPRequestHandler):
   <div>
     <span class="pill">""" + esc(detect_level(row)) + """</span>
     <span class="pill">""" + esc(detect_salary(row)) + """</span>
+    <span class="pill">Added """ + esc(display_date(row.get("created_at"))) + """</span>
     <span class="pill">""" + esc(row.get("apply_decision")) + """</span>
     <span class="pill">""" + esc(row.get("status")) + """</span>
     """ + "".join("<span class='pill tag'>" + esc(item) + "</span>" for item in specialty) + """
@@ -594,8 +678,9 @@ class App(BaseHTTPRequestHandler):
     <label>Role</label><input name="role" placeholder="Software Engineer II, Cloud Platform">
     <label>Location</label><input name="location" placeholder="Santa Clara, CA / Remote">
     <label>Link</label><input name="link" placeholder="https://...">
+    <label>Posted date</label><input name="posted_at" placeholder="May 30, 2026 / Posted 3 Days Ago">
     <label>Description</label><textarea name="description" placeholder="Paste the job description here"></textarea>
-    <label>Referral contact</label><input name="referral_contact" placeholder="Alex at NVIDIA">
+    <label>Contact</label><input name="contact" placeholder="Recruiter or hiring contact">
     <label>Notes</label><input name="notes" placeholder="Ask for team guidance first">
     <input type="hidden" name="status" value="saved">
     <p><button>Score and save</button></p>
@@ -850,7 +935,7 @@ class App(BaseHTTPRequestHandler):
   <div class="panel">
     <h1>""" + esc(job.get("role")) + """</h1>
     <p class="muted">""" + esc(job.get("company")) + """ · """ + esc(job.get("location")) + """</p>
-    <p><span class="pill score">Score """ + str(job.get("score") or 0) + """</span><span class="pill">Infra """ + str(job.get("infrastructure_alignment_score") or 0) + """</span><span class="pill">""" + esc(job.get("apply_decision")) + """</span><span class="pill">""" + esc(job.get("status")) + """</span></p>
+    <p><span class="pill score">Score """ + str(job.get("score") or 0) + """</span><span class="pill">Infra """ + str(job.get("infrastructure_alignment_score") or 0) + """</span><span class="pill">""" + esc(job.get("apply_decision")) + """</span><span class="pill">""" + esc(job.get("status")) + """</span><span class="pill">""" + esc(posted_label(job)) + """</span><span class="pill">Source """ + esc(job.get("source") or "manual") + """</span></p>
     <p>""" + ("<a class='button ghost' target='_blank' href='" + esc(job.get("link")) + "'>Open posting</a>" if job.get("link") else "") + """</p>
     <h2>Decision Reasoning</h2><p>""" + esc(classified["reasoning"]) + """</p>
     <h2>Current Resume Match</h2><p><b>""" + str(match["resume_match_score"]) + """/100</b> · """ + esc(match["readiness"]) + """</p>
@@ -880,7 +965,7 @@ class App(BaseHTTPRequestHandler):
       <label>Status</label><select name="status">
         """ + status_options(job.get("status")) + """
       </select>
-      <label>Referral contact</label><input name="referral_contact" value=\"""" + esc(job.get("referral_contact")) + """\">
+      <label>Contact</label><input name="referral_contact" value=\"""" + esc(job.get("contact")) + """\">
       <label>Notes</label><textarea name="notes">""" + esc(job.get("notes")) + """</textarea>
       <p><button>Update</button></p>
     </form>
@@ -894,7 +979,7 @@ class App(BaseHTTPRequestHandler):
       <label>Scheduled at</label><input name="scheduled_at" type="datetime-local">
       <label>Timezone</label><input name="timezone" value="America/Chicago">
       <label>Format</label><input name="format" value="phone">
-      <label>Contact</label><input name="contact" value=\"""" + esc(job.get("referral_contact")) + """\">
+      <label>Contact</label><input name="contact" value=\"""" + esc(job.get("contact")) + """\">
       <label>Prep focus</label><input name="prep_focus" placeholder="Recruiter screen, project story, role fit">
       <label>Notes</label><textarea name="notes"></textarea>
       <input type="hidden" name="status" value="scheduled">

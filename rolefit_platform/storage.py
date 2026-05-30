@@ -16,6 +16,8 @@ create table if not exists jobs (
     apply_decision text,
     contact text,
     status text default 'saved',
+    posted_at text,
+    source text,
     notes text,
     created_at text default current_timestamp,
     updated_at text default current_timestamp
@@ -88,6 +90,8 @@ def connect(path):
     conn.execute(INTERVIEWS_SCHEMA)
     conn.execute(SCRAPE_RUNS_SCHEMA)
     ensure_column(conn, "tailored_resumes", "projects", "text")
+    ensure_column(conn, "jobs", "posted_at", "text")
+    ensure_column(conn, "jobs", "source", "text")
     return conn
 
 
@@ -103,8 +107,8 @@ def add_job(db_path, job):
     cur = conn.execute(
         """
         insert into jobs
-        (company, role, location, link, description, score, infrastructure_alignment_score, apply_decision, contact, status, notes)
-        values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        (company, role, location, link, description, score, infrastructure_alignment_score, apply_decision, contact, status, posted_at, source, notes)
+        values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             job.get("company"),
@@ -117,6 +121,8 @@ def add_job(db_path, job):
             job.get("apply_decision"),
             job.get("contact"),
             job.get("status", "saved"),
+            job.get("posted_at"),
+            job.get("source"),
             job.get("notes"),
         ),
     )
@@ -234,12 +240,12 @@ def list_jobs(db_path, limit=50, status=None):
     conn = connect(db_path)
     if status:
         rows = conn.execute(
-            "select * from jobs where status = ? order by score desc, infrastructure_alignment_score desc, created_at desc limit ?",
+            "select * from jobs where status = ? order by coalesce(posted_at, created_at) desc, score desc, infrastructure_alignment_score desc limit ?",
             (status, limit),
         ).fetchall()
     else:
         rows = conn.execute(
-            "select * from jobs where status != 'skipped' order by score desc, infrastructure_alignment_score desc, created_at desc limit ?",
+            "select * from jobs where status != 'skipped' order by coalesce(posted_at, created_at) desc, score desc, infrastructure_alignment_score desc limit ?",
             (limit,),
         ).fetchall()
     conn.close()
