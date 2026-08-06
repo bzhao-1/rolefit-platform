@@ -1,0 +1,33 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "rolefit-platform"
+version = "0.1.0"
+description = "Offline-first job ingestion, deterministic scoring, and resume workflow tooling"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { file = "LICENSE" }
+authors = [{ name = "Ben Zhao" }]
+dependencies = []
+keywords = ["ats", "automation", "cli", "job-search", "local-first", "sqlite"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Environment :: Console",
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+]
+
+[project.scripts]
+rolefit-platform = "rolefit_platform.cli:main"
+
+[project.urls]
+Repository = "https://github.com/bzhao-1/rolefit-platform"
+
+[tool.setuptools.packages.find]
+include = ["rolefit_platform*"]
+

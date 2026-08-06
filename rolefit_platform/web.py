@@ -310,6 +310,17 @@ def layout(title, body):
 class App(BaseHTTPRequestHandler):
     db_path = None
 
+    def do_HEAD(self):
+        parsed = urllib.parse.urlparse(self.path)
+        known_paths = {
+            "/", "/add", "/pull", "/agent", "/status", "/matches",
+            "/interviews", "/job", "/export", "/export-resumes",
+        }
+        status = 200 if parsed.path in known_paths else 404
+        self.send_response(status)
+        self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.end_headers()
+
     def send_html(self, body, title="rolefit-platform", status=200):
         raw = layout(title, body).encode("utf-8")
         self.send_response(status)

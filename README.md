@@ -1,278 +1,148 @@
 # RoleFit Platform
 
-RoleFit Platform is a local Python system for ingesting ATS job feeds, scoring software engineering roles, tracking opportunities in SQLite, and automating resume match/tailoring workflows through both a CLI and a browser-based local dashboard.
+RoleFit Platform is an offline-first Python application for collecting public software-engineering job postings, applying deterministic fit rules, tracking opportunities in SQLite, and producing resume-matching and tailoring artifacts through a CLI and local web interface.
 
-The project is intentionally offline-first. It uses deterministic scoring, standard-library HTTP/HTML handling, and SQLite storage, with no paid APIs or hosted services required. The modules are separated so richer scraping, ranking models, or LLM summarization can be added later without replacing the core pipeline.
+It does not use a hosted model or paid API. The scoring behavior is explicit and inspectable so results can be tested, explained, and changed without retraining a model.
 
-## Core Capabilities
+![RoleFit Platform dashboard](docs/rolefit-dashboard.png)
 
-- Pull public Greenhouse, Lever, Eightfold, Workday CXS, Ashby, and HTML search postings, normalize descriptions, dedupe saved roles, and filter location eligibility.
-- Run an agent-style scraper loop for routine public ATS ingestion, scoring, cleanup, and tailoring without manual button-clicking.
-- Score postings from 0-100 for backend, platform, cloud infrastructure, distributed systems, reliability, automation, and production ownership signals.
-- Classify roles as `High priority`, `Review selectively`, or `Skip` using deterministic stack, level, location, and role-quality checks.
-- Detect infrastructure alignment across cloud platform systems, GPU/AI infrastructure, orchestration, APIs, reliability, and SRE collaboration.
-- Store job records, scores, status, notes, contacts, and generated tailoring snapshots in SQLite.
-- Compare a resume against job requirements and rank tracked jobs by combined role score plus resume match score.
-- Generate tailored resume bullets, keyword lists, positioning guidance, gap analysis, project selections, and finished DOCX resumes.
-- Prefer production-grade framing for platform and release-operations work, including AI-assisted triage systems with explicit human approval boundaries.
-- Track interview events with stage, scheduled time, format, contact, prep focus, status, and notes.
-- Provide a dependency-free local dashboard for ingestion, scoring, tracking, matching, tailoring, status updates, and CSV export.
+## What it does
 
-## Setup
+- Ingests public Greenhouse, Lever, Eightfold, Workday CXS, Ashby, and HTML career listings.
+- Normalizes and deduplicates job records.
+- Scores backend, platform, cloud, reliability, automation, and infrastructure signals.
+- Stores jobs, statuses, notes, contacts, interviews, and tailoring snapshots in SQLite.
+- Compares saved roles with a resume profile and exports tailored DOCX files.
+- Provides the same workflow through an `argparse` CLI and dependency-free local dashboard.
+
+## Architecture
+
+```mermaid
+flowchart LR
+    A["Public ATS and careers pages"] --> B["Source adapters"]
+    B --> C["Normalize and deduplicate"]
+    C --> D["Score, classify, and check location"]
+    D --> E["SQLite workflow store"]
+    E --> F["CLI"]
+    E --> G["Local web UI"]
+    E --> H["Resume match and tailoring"]
+    H --> I["DOCX and CSV exports"]
+```
+
+The application separates ingestion, scoring, persistence, presentation, and resume generation so each layer can be tested independently.
+
+## Installation
+
+Requirements: Python 3.10 or newer.
 
 ```bash
+git clone https://github.com/bzhao-1/rolefit-platform.git
 cd rolefit-platform
-python3 -m rolefit_platform --help
+python3 -m venv .venv
+source .venv/bin/activate
+python3 -m pip install --upgrade pip
+python3 -m pip install -e .
+rolefit-platform --help
 ```
 
-Optional shell alias:
+The application uses only the Python standard library at runtime.
+
+## Quick start
+
+Start the local dashboard:
 
 ```bash
-alias rolefit-platform='python3 -m rolefit_platform'
+rolefit-platform serve
 ```
 
-The default SQLite database is:
+Then open `http://127.0.0.1:8765`.
+
+Use a repository-local database instead of the default user database:
 
 ```bash
-~/.rolefit-platform/jobs.sqlite3
+rolefit-platform --db ./jobs.sqlite3 list-top
 ```
 
-You can override it with `--db` before any command:
+Classify the included example posting:
 
 ```bash
-python3 -m rolefit_platform --db ./jobs.sqlite3 list-top
+rolefit-platform classify-job \
+  --company "Example Cloud Co." \
+  --file examples/cloud_platform_job.txt
 ```
 
-## Local Dashboard
-
-Start the browser UI:
+Pull a public Greenhouse board:
 
 ```bash
-python3 -m rolefit_platform serve
-```
-
-Or double-click:
-
-```text
-launch.command
-```
-
-The dashboard runs locally at:
-
-```text
-http://127.0.0.1:8765
-```
-
-From the dashboard you can paste a job description, add a posting URL, pull public ATS feeds, inspect scored roles, update tracker status, review resume match results, generate missing tailoring snapshots, export CSV data, and export finished DOCX resumes.
-
-## Example Commands
-
-Pull default public ATS feeds:
-
-```bash
-python3 -m rolefit_platform pull-jobs --limit 50
-```
-
-Default ingestion includes representative public ATS adapters for Greenhouse, Lever, Eightfold, Workday CXS, Ashby, and a public careers HTML search parser. Dynamic or guarded careers pages can still be saved manually through the dashboard or `add-job`.
-
-The scraper does broad market ingestion first, then uses the resume for scoring and tailoring. Workday searches expand across backend, platform, infrastructure, cloud, developer infrastructure, reliability, production engineering, AI infrastructure, and data infrastructure terms. Relevant source-filtered roles are saved even when the classifier says `Skip`, so the dashboard can show the role and the resume tailorer can still attempt a fit analysis.
-
-Run the scraper agent once:
-
-```bash
-python3 -m rolefit_platform scrape-agent --once --limit 50
-```
-
-Run the scraper agent routinely every 6 hours:
-
-```bash
-python3 -m rolefit_platform scrape-agent --interval-minutes 360 --limit 50
-```
-
-Show recent scraper-agent runs:
-
-```bash
-python3 -m rolefit_platform scrape-agent --recent
-```
-
-Pull a specific public Greenhouse board:
-
-```bash
-python3 -m rolefit_platform pull-jobs \
+rolefit-platform pull-jobs \
   --greenhouse-board grafanalabs \
   --company "Grafana Labs" \
   --limit 20
 ```
 
-Pull a Workday CXS source:
+Run one ingestion and scoring cycle:
 
 ```bash
-python3 -m rolefit_platform pull-jobs \
-  --workday-site ExampleExternalCareerSite \
-  --company "Example Systems" \
-  --limit 20
+rolefit-platform scrape-agent --once --limit 50
 ```
 
-Pull an Ashby source:
+Export tracked roles:
 
 ```bash
-python3 -m rolefit_platform pull-jobs \
-  --ashby-board example \
-  --company "Example AI" \
-  --limit 20
+rolefit-platform export --output job_tracker_export.csv
 ```
 
-Pull a public careers HTML search page:
+## Scoring model
+
+The scorer rewards explicit evidence of backend/platform ownership, distributed systems, cloud infrastructure, orchestration, reliability, deployment automation, testing, observability, security, and data pipelines. It also considers role level and location eligibility.
+
+The output includes matched terms and category-level points. It is a deterministic heuristic, not a statistical prediction of whether an application will succeed.
+
+## Development
+
+Run the test suite:
 
 ```bash
-python3 -m rolefit_platform pull-jobs \
-  --apple-url "https://jobs.example.com/search?search=software%20engineer&location=united-states" \
-  --company "Example Devices" \
-  --limit 20
+python3 -m unittest discover -s tests -v
 ```
 
-Score a pasted posting:
-
-```bash
-python3 -m rolefit_platform score-job \
-  --company "Example Cloud Co." \
-  --text "Software Engineer II, Cloud Platform Infrastructure. Python, Java, Kubernetes, APIs, distributed systems, CI/CD, reliability, 1+ years."
-```
-
-Classify a posting from a text file:
-
-```bash
-python3 -m rolefit_platform classify-job \
-  --company "Example Cloud Co." \
-  --file examples/cloud_platform_job.txt
-```
-
-Add a posting to the tracker:
-
-```bash
-python3 -m rolefit_platform add-job \
-  --company "Example Cloud Co." \
-  --role "Software Engineer II, Cloud Platform Infrastructure" \
-  --location "Austin, TX / Remote" \
-  --url "https://example.com/job" \
-  --file examples/cloud_platform_job.txt \
-  --contact "platform team source" \
-  --notes "Verify ownership of infrastructure APIs and release automation."
-```
-
-Score resume fit for a saved posting:
-
-```bash
-python3 -m rolefit_platform resume-match --job-id 1
-```
-
-Rank tracked postings by role score plus resume match:
-
-```bash
-python3 -m rolefit_platform tailor-top --limit 5
-```
-
-Generate saved tailoring snapshots:
-
-```bash
-python3 -m rolefit_platform auto-tailor --missing-only
-```
-
-Export finished DOCX resumes for matched postings:
-
-```bash
-python3 -m rolefit_platform export-resumes --output-dir generated_resumes --limit 25
-```
-
-Add an interview event:
-
-```bash
-python3 -m rolefit_platform add-interview \
-  --company "Example Cloud Co." \
-  --role "Software Engineer II" \
-  --stage "phone screen" \
-  --scheduled-at "2026-05-08T16:00" \
-  --timezone "America/Chicago" \
-  --format "phone"
-```
-
-List scheduled interviews:
-
-```bash
-python3 -m rolefit_platform list-interviews --status scheduled
-```
-
-Run tests:
-
-```bash
-python3 -m unittest discover -s tests
-```
-
-Export tracker data:
-
-```bash
-python3 -m rolefit_platform export --output job_tracker_export.csv
-```
-
-## Scoring Model
-
-The deterministic scorer rewards:
-
-- backend, platform, cloud, and infrastructure relevance
-- distributed systems, reliability, orchestration, and multi-tenant systems
-- Python, Java, Go, SQL, APIs, Linux, Docker, Terraform, and Kubernetes
-- CI/CD, deployment automation, validation, release gates, testing, and observability
-- security, compliance, vulnerability automation, telemetry, and data pipelines
-- infrastructure lifecycle work, GPU/AI infrastructure, and SRE/developer collaboration
-- clear software engineering ownership and early-career level fit
-
-It penalizes:
-
-- non-US onsite roles unless explicitly remote or US-eligible
-- senior/staff/principal mismatch
-- roles requiring 4+ years when evaluating early-career fit
-- frontend-heavy, mobile-only, embedded/firmware, data scientist, ML researcher, support/IT, internship, and new-grad-only signals
-- low-signal staffing-firm postings
-
-## Architecture
-
-```text
-rolefit_platform/
-  alignment.py      infrastructure alignment detector
-  auto_tailor.py    saved tailoring generation
-  classifier.py     deterministic high-priority/review/skip logic
-  cli.py            argparse CLI
-  location.py       US/remote location eligibility checks
-  maintenance.py    tracker cleanup utilities
-  outreach.py       concise outreach-note generator
-  prep.py           interview prep mapper
-  profile.py        anonymized sample profile and resume context
-  resume.py         resume tailoring engine
-  resume_export.py  DOCX resume exporter
-  resume_match.py   resume/job match scoring and ranking
-  scraper_agent.py  routine ATS scraping, scoring, dedupe, cleanup, and auto-tailoring
-  scoring.py        0-100 scoring engine
-  sources.py        ATS/feed ingestion adapters
-  storage.py        SQLite tracker and CSV export
-  text_utils.py     URL/text loading helpers
-  web.py            dependency-free local browser UI
-examples/
-  cloud_platform_job.txt
-tests/
-  test_resume_tailoring.py
-launch.command      macOS double-click launcher
-```
-
-## Portfolio Notes
-
-This is a backend/platform project, not a marketing site. The technical emphasis is deterministic ranking, ATS ingestion, SQLite-backed workflow state, local-first tooling, modular scoring logic, and document generation automation.
-
-## Maintainer Notes
-
-This repository is the public-safe portfolio edition. Private deployment targets, employer-specific naming, personal contact data, and active-search framing should stay out of this codebase. When syncing changes from a private working repo, port implementation behavior and tests, then re-run:
+Compile all modules:
 
 ```bash
 python3 -m compileall rolefit_platform
-python3 -m unittest discover -s tests
-rg -n "PRIVATE_COMPANY|PRIVATE_NAME|PRIVATE_EMAIL|PRIVATE_PATH|active-search-framing" .
 ```
+
+CI performs an editable package install, compilation check, and unit tests on Python 3.10 and 3.12.
+
+## Current limitations
+
+- Dynamic or guarded careers pages may require manual entry.
+- Source adapters depend on public page/API formats and need regression fixtures when those formats change.
+- The local server is designed for one trusted user, not public multi-user hosting.
+- Scoring quality depends on explicit rules and representative evaluation examples.
+- Network integrations are intentionally excluded from CI; parsers are tested with local fixtures.
+
+## Repository layout
+
+```text
+rolefit_platform/
+  sources.py         public source adapters
+  scoring.py         deterministic role scoring
+  classifier.py      priority classification
+  storage.py         SQLite persistence and CSV export
+  scraper_agent.py   repeated ingestion workflow
+  resume_match.py    resume-to-role comparison
+  resume_export.py   DOCX generation
+  cli.py             command-line interface
+  web.py             local browser interface
+examples/
+tests/
+```
+
+## Privacy
+
+Local databases, generated resumes, and exports are ignored by Git. Review generated artifacts before sharing them.
+
+## License
+
+MIT. See [LICENSE](LICENSE).
