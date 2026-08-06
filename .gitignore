@@ -8,3 +8,6 @@ job_tracker_export.csv
 generated_resumes/
 .venv/
 venv/
+build/
+dist/
+*.egg-info/
