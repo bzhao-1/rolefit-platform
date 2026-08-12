@@ -1,6 +1,9 @@
+import os
+import tempfile
 import unittest
 
 from rolefit_platform.sources import extract_apple_cards, extract_eightfold_objects
+from rolefit_platform.storage import add_job, find_existing_job, list_jobs, update_status
 from rolefit_platform.web import App
 
 
@@ -16,13 +19,30 @@ class SourceParsingTest(unittest.TestCase):
             "score": 70,
             "status": "saved",
         }])
-        self.assertEqual(card.count("action='/quick-status'"), 6)
+        self.assertEqual(card.count("action='/quick-status'"), 7)
         self.assertIn("value='contact requested'", card)
         self.assertIn("value='interview'", card)
         self.assertIn("value='offer'", card)
+        self.assertIn("value='skipped'", card)
+        self.assertIn("Ignore and remove from home", card)
         self.assertIn("/export-resume?job_id=42", card)
         self.assertNotIn("/export-resumes?limit=25", card)
         self.assertIn("/?status=pulled", card)
+
+    def test_ignored_job_leaves_home_feed_but_remains_deduplicated(self):
+        with tempfile.TemporaryDirectory() as directory:
+            db_path = os.path.join(directory, "jobs.sqlite3")
+            link = "https://example.com/jobs/backend-1"
+            job_id = add_job(db_path, {
+                "company": "ExampleCo",
+                "role": "Backend Engineer I",
+                "link": link,
+                "status": "saved",
+            })
+
+            self.assertTrue(update_status(db_path, job_id, "skipped"))
+            self.assertEqual(list_jobs(db_path, 20), [])
+            self.assertEqual(find_existing_job(db_path, link=link)["id"], job_id)
 
     def test_extract_eightfold_objects_from_html_entities(self):
         html = """

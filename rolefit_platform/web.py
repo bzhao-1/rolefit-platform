@@ -42,19 +42,23 @@ def job_quick_actions(row, return_to="/"):
         ("interview", "Interview"),
         ("offer", "Offer"),
         ("rejected", "Reject"),
+        ("skipped", "Ignore"),
     ]
     current = row.get("status") or "pulled"
     job_id = str(row.get("id"))
     parts = ["<div class='quick-stages' aria-label='Application stage'>"]
     for status, label in stages:
         current_class = " current" if status == current else ""
+        ignore_class = " ignore" if status == "skipped" else ""
+        form_class = " class='ignore-action'" if status == "skipped" else ""
         disabled = " disabled" if status == current else ""
+        title = "Ignore and remove from home" if status == "skipped" else "Move to " + label
         parts.append(
-            "<form method='post' action='/quick-status'>"
+            "<form" + form_class + " method='post' action='/quick-status'>"
             "<input type='hidden' name='job_id' value='" + esc(job_id) + "'>"
             "<input type='hidden' name='status' value='" + esc(status) + "'>"
             "<input type='hidden' name='return_to' value='" + esc(return_to) + "'>"
-            "<button class='quick-stage" + current_class + "' title='Move to " + esc(label) + "'" + disabled + ">" + esc(label) + "</button>"
+            "<button class='quick-stage" + current_class + ignore_class + "' title='" + esc(title) + "'" + disabled + ">" + esc(label) + "</button>"
             "</form>"
         )
     parts.append("</div>")
@@ -255,8 +259,11 @@ def layout(title, body):
     .job-actions { display:flex; gap:8px; flex-wrap:wrap; margin-top:10px; }
     .quick-stages { display:flex; gap:6px; flex-wrap:wrap; align-items:center; margin-top:12px; padding-top:10px; border-top:1px solid var(--line); }
     .quick-stages form { margin:0; }
+    .quick-stages .ignore-action { margin-left:auto; }
     .quick-stage { min-height:30px; padding:5px 9px; background:#1d2a3a; color:var(--ink); font-size:12px; }
     .quick-stage:hover { background:#2a3b50; }
+    .quick-stage.ignore { color:var(--muted); }
+    .quick-stage.ignore:hover { color:var(--ink); background:#35232b; }
     .quick-stage.current, .quick-stage:disabled { background:#0f3a36; color:#5eead4; cursor:default; opacity:1; }
     .empty { padding:28px; text-align:center; }
     .stage { border-left:4px solid var(--accent); }
@@ -429,7 +436,7 @@ class App(BaseHTTPRequestHandler):
             update_status(self.db_path, int(data.get("job_id")), data.get("status"), data.get("notes"), data.get("contact"))
             self.redirect("/job?id=" + urllib.parse.quote(data.get("job_id", "")))
         elif parsed.path == "/quick-status":
-            allowed = {"saved", "contact requested", "applied", "interview", "offer", "rejected"}
+            allowed = {"saved", "contact requested", "applied", "interview", "offer", "rejected", "skipped"}
             status = data.get("status") or ""
             job_id = int(data.get("job_id") or "0")
             if status in allowed:
