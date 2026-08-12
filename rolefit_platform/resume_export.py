@@ -347,7 +347,12 @@ def export_job_resume(db_path, job_id, output_dir=DEFAULT_OUTPUT_DIR):
     job = get_job(db_path, job_id)
     if not job:
         return None
-    tailoring = get_tailored_resume(db_path, job_id) or auto_tailor_job(db_path, job_id)
+    tailoring = get_tailored_resume(db_path, job_id)
+    source = (tailoring or {}).get("resume_source")
+    if source and os.path.isfile(os.path.expanduser(source)):
+        tailoring = auto_tailor_job(db_path, job_id, source)
+    elif not tailoring:
+        tailoring = auto_tailor_job(db_path, job_id)
     if not tailoring:
         return None
     output_dir = os.path.abspath(output_dir)

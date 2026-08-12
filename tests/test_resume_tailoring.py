@@ -17,6 +17,21 @@ optimizes AI-driven workflows, and works with engineering teams. Requires Python
 or Java, cloud infrastructure, REST/gRPC APIs, debugging, and test automation.
 """
 
+BACKEND_TEXT = """
+Backend Software Engineer. Build Java and Python services, REST and gRPC APIs,
+distributed systems, CI/CD automation, and reliable cloud infrastructure.
+"""
+
+SRE_TEXT = """
+Site Reliability Engineer. Own observability, monitoring, incident response,
+availability, production reliability, Kubernetes, and automated validation.
+"""
+
+SECURITY_TEXT = """
+Backend Security Engineer. Develop vulnerability data pipelines, automate risk
+and compliance workflows, and improve audit coverage for cloud infrastructure.
+"""
+
 
 class ResumeTailoringTest(unittest.TestCase):
     def test_ai_release_ops_is_professional_experience_for_ai_platform_roles(self):
@@ -39,6 +54,27 @@ class ResumeTailoringTest(unittest.TestCase):
             "Computer Vision For Autonomous Driving",
             "Scheme Interpreter",
         ])
+
+    def test_bullets_change_by_role_focus_and_do_not_repeat_built(self):
+        backend = tailor_resume(BACKEND_TEXT)["rewritten_bullets"]
+        sre = tailor_resume(SRE_TEXT)["rewritten_bullets"]
+        security = tailor_resume(SECURITY_TEXT)["rewritten_bullets"]
+
+        self.assertNotEqual(backend, sre)
+        self.assertNotEqual(sre, security)
+        self.assertTrue(any("Python and Java" in bullet for bullet in backend))
+        self.assertTrue(any("observability views" in bullet for bullet in sre))
+        self.assertTrue(any("vulnerability signals" in bullet for bullet in security))
+        self.assertEqual(sum(bullet.lower().startswith("built ") for bullet in backend), 0)
+        self.assertEqual(len({bullet.split()[0] for bullet in backend}), len(backend))
+
+    def test_explicit_role_title_controls_primary_tailoring_focus(self):
+        mixed = "Cloud platform with security, compliance, risk, monitoring, incidents, and distributed services."
+        sre = tailor_resume(mixed, role="Site Reliability Engineer")["rewritten_bullets"]
+        security = tailor_resume(mixed, role="Software Engineer, Product Security Data Platforms")["rewritten_bullets"]
+
+        self.assertTrue(any("observability views" in bullet for bullet in sre))
+        self.assertTrue(any("vulnerability signals" in bullet for bullet in security))
 
     def test_single_job_export_writes_only_requested_resume(self):
         with tempfile.TemporaryDirectory() as directory:

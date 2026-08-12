@@ -19,6 +19,15 @@ EXPERIENCE_THEMES = {
 }
 
 
+FOCUS_TERMS = {
+    "security": ["security", "compliance", "vulnerability", "risk", "audit", "governance", "fips"],
+    "ai": ["ai", "ml", "llm", "rag", "genai", "copilot", "agentic", "responsible ai"],
+    "reliability": ["sre", "reliability", "observability", "monitoring", "incident", "on-call", "availability"],
+    "backend": ["backend", "java", "python", "api", "rest", "grpc", "service", "distributed systems"],
+    "platform": ["platform", "infrastructure", "cloud", "compute", "kubernetes", "linux", "terraform"],
+}
+
+
 AI_RELEASE_OPS_TAGS = [
     "ai_assisted_tooling", "genai", "platform_engineering",
     "cloud_infrastructure", "release_engineering", "devops", "sre",
@@ -72,7 +81,12 @@ BULLET_BANK = [
             "developer productivity",
         ],
         "impact": 3,
-        "text": "Built an AI-assisted release-operations system for cloud infrastructure rollouts that centralizes validation state, release orchestration failures, DevOps pipeline status, regional capacity health, test failures, and remediation guidance.",
+        "text": "Engineered an AI-assisted release-operations system for cloud infrastructure rollouts that centralizes validation state, release orchestration failures, capacity health, test failures, and remediation guidance.",
+        "variants": {
+            "ai": "Engineered an AI-assisted release-operations system that synthesizes validation state, pipeline failures, capacity health, and remediation guidance into human-reviewed rollout decisions.",
+            "backend": "Created a release-operations system that consolidates validation, pipeline, capacity, and remediation data into decision-ready rollout guidance.",
+            "reliability": "Created a release-operations system to unify validation state, pipeline failures, capacity health, and remediation guidance for faster infrastructure release decisions.",
+        },
     },
     {
         "id": "ai_release_safe_actions",
@@ -87,6 +101,10 @@ BULLET_BANK = [
         ],
         "impact": 2,
         "text": "Integrated live release metadata, curated failure memory, and deterministic guardrails to recommend safe next actions such as targeted regional retries, known-failure handling, quarantine candidates, and host-investigation workflows.",
+        "variants": {
+            "backend": "Integrated release-orchestration metadata and curated failure memory behind deterministic decision rules for regional retries, known-failure handling, quarantine candidates, and host investigation.",
+            "reliability": "Reduced release-triage ambiguity by combining live rollout metadata, recurring failure history, and deterministic guardrails into safe regional retry, quarantine, and host-investigation paths.",
+        },
     },
     {
         "id": "ai_release_safeguards",
@@ -100,7 +118,11 @@ BULLET_BANK = [
             "production", "release", "safeguard",
         ],
         "impact": 2,
-        "text": "Added production safeguards for AI-assisted release actions, including dependency preservation, stale image prevention, latest-successful pipeline selection, and visible human approval boundaries.",
+        "text": "Established production safeguards for AI-assisted release actions, including dependency preservation, stale image prevention, latest-successful pipeline selection, and visible human approval boundaries.",
+        "variants": {
+            "ai": "Established human-in-the-loop safeguards for AI-assisted release actions, preserving dependencies, blocking stale images, selecting the latest successful pipeline, and keeping human approval boundaries explicit.",
+            "reliability": "Prevented stale-image and dependency errors during rollout recovery through deterministic pipeline selection and explicit human approval boundaries.",
+        },
     },
     {
         "id": "ai_release_triage_workflows",
@@ -115,6 +137,10 @@ BULLET_BANK = [
         ],
         "impact": 2,
         "text": "Developed AI-assisted release triage workflows that analyze pipeline failures, execution target status, regional capacity health, recurring failure patterns, and known remediation paths for production image validation.",
+        "variants": {
+            "backend": "Implemented release-triage workflows that correlate pipeline failures, execution-target status, capacity health, recurring failure patterns, and known remediation paths.",
+            "reliability": "Automated analysis of pipeline failures, execution-target health, recurring failure patterns, and known remediations for production image validation.",
+        },
     },
     {
         "id": "regional_retry_automation",
@@ -128,7 +154,7 @@ BULLET_BANK = [
             "ci/cd",
         ],
         "impact": 2,
-        "text": "Built release automation capabilities for targeted regional retry creation while preserving release dependency ordering and preventing stale image selection during rollout recovery.",
+        "text": "Implemented targeted regional retry automation while preserving release dependency ordering and preventing stale image selection during rollout recovery.",
     },
     {
         "id": "release_gates",
@@ -136,7 +162,13 @@ BULLET_BANK = [
         "terms": ["deployment", "release", "ci/cd", "validation", "test automation", "unit", "integration", "e2e", "quality"],
         "impact": 3,
         "required_for": ["service", "test automation", "production", "reliability", "cloud", "api"],
-        "text": "Built and operated deployment validation and release-gating systems that ran stable 200+ test suites across service repositories, improving confidence for production service changes.",
+        "text": "Operated deployment validation and release-gating systems across service repositories, executing a stable 200+ test suite to improve confidence in production changes.",
+        "variants": {
+            "ai": "Operated deployment validation across service repositories, executing 200+ test suites to improve confidence in production changes supporting AI-assisted release workflows.",
+            "backend": "Operated release gates across multiple service repositories, executing 200+ test suites to validate production service changes before rollout.",
+            "reliability": "Expanded deployment validation across service repositories with 200+ test suites, increasing coverage and confidence for production releases.",
+            "platform": "Scaled deployment validation and release gates across service repositories, running 200+ test suites before production infrastructure changes.",
+        },
     },
     {
         "id": "hypervisor_validation",
@@ -144,6 +176,10 @@ BULLET_BANK = [
         "terms": ["cloud", "infrastructure", "compute", "vm", "hypervisor", "linux", "reliability", "migration", "scale"],
         "impact": 2,
         "text": "Owned hypervisor image validation for cloud platform migrations, validating fleet readiness and reducing rollout risk across production VM infrastructure.",
+        "variants": {
+            "reliability": "Qualified hypervisor images for cloud platform migrations, isolating rollout failures and reducing reliability risk across production VM infrastructure.",
+            "platform": "Owned hypervisor image qualification for cloud platform migrations, validating fleet readiness across production VM infrastructure.",
+        },
     },
     {
         "id": "security_pipeline",
@@ -152,6 +188,10 @@ BULLET_BANK = [
         "impact": 3,
         "required_for": ["security", "responsible ai", "production", "scale", "cloud"],
         "text": "Delivered a production security data pipeline that ingested, normalized, correlated, and visualized vulnerability signals across 10k+ hypervisors and 100k+ VMs per month.",
+        "variants": {
+            "backend": "Engineered a production data pipeline that ingested, normalized, and correlated vulnerability signals across 10k+ hypervisors and 100k+ VMs per month.",
+            "security": "Delivered an end-to-end security data pipeline that normalized and correlated vulnerability signals across 10k+ hypervisors and 100k+ VMs per month for fleet risk analysis.",
+        },
     },
     {
         "id": "security_triage",
@@ -160,13 +200,21 @@ BULLET_BANK = [
         "impact": 3,
         "required_for": ["security", "automation", "workflow", "live site", "troubleshoot"],
         "text": "Automated triage and remediation workflows for hundreds of recurring fleet security findings per month, reducing manual investigation time and improving production risk analysis.",
+        "variants": {
+            "security": "Automated triage and remediation for hundreds of recurring fleet security findings per month, reducing manual investigation and surfacing fleet-wide risk patterns.",
+            "reliability": "Streamlined investigation of hundreds of recurring fleet findings per month through automated triage, remediation workflows, and production risk analysis.",
+        },
     },
     {
         "id": "observability",
         "theme": "observability/data",
         "terms": ["observability", "monitoring", "metrics", "telemetry", "performance", "customer outcomes", "model performance", "alerting"],
         "impact": 1,
-        "text": "Built observability and reporting workflows for cloud infrastructure validation and fleet security systems, turning production signals into actionable release and reliability decisions.",
+        "text": "Created observability and reporting workflows for cloud infrastructure validation and fleet security systems, turning production signals into actionable release and reliability decisions.",
+        "variants": {
+            "backend": "Implemented metrics and reporting workflows that transform cloud validation and fleet security signals into actionable release decisions.",
+            "reliability": "Converted cloud validation and fleet security signals into observability views used for release and reliability decisions.",
+        },
     },
     {
         "id": "long_running_tests",
@@ -175,13 +223,21 @@ BULLET_BANK = [
         "impact": 2,
         "required_for": ["test automation", "debugging", "reliability", "production"],
         "text": "Designed a long-running VM validation stage for already-running instances, expanding test coverage beyond launch flows and catching stability regressions before production rollout.",
+        "variants": {
+            "backend": "Extended automated validation to already-running VMs, covering update paths and detecting regressions that launch-only testing could not catch before rollout.",
+            "reliability": "Designed long-running validation for already-running VMs, catching stability regressions that launch-only testing could not detect before production rollout.",
+        },
     },
     {
         "id": "api_automation",
         "theme": "API/platform",
         "terms": ["api", "rest", "grpc", "service", "automation", "workflow", "program managers", "cross-functional"],
         "impact": 1,
-        "text": "Built Python/Java-oriented platform automation spanning validation, observability, release readiness, and recurring fleet issue remediation.",
+        "text": "Developed Python- and Java-oriented platform automation spanning validation, observability, release readiness, and recurring fleet issue remediation.",
+        "variants": {
+            "backend": "Developed platform automation in Python and Java across validation, observability, release readiness, and recurring fleet remediation workflows.",
+            "platform": "Streamlined validation, observability, release-readiness, and fleet-remediation workflows using Python and Java.",
+        },
     },
     {
         "id": "distributed_reliability",
@@ -189,6 +245,10 @@ BULLET_BANK = [
         "terms": ["distributed", "scale", "scalability", "reliability", "live site", "customer", "availability", "performance"],
         "impact": 1,
         "text": "Improved reliability coverage for distributed cloud infrastructure by integrating fleet-level validation, monitoring, and release-readiness checks into production-adjacent workflows.",
+        "variants": {
+            "backend": "Integrated fleet-level validation, monitoring, and release-readiness checks for distributed cloud infrastructure into production engineering workflows.",
+            "reliability": "Improved distributed cloud reliability coverage by combining fleet-level validation, monitoring, and release-readiness checks.",
+        },
     },
     {
         "id": "cross_functional",
@@ -215,7 +275,7 @@ PROJECT_BANK = [
         "date": "May 2026",
         "always_include": True,
         "bullets": [
-            "Built a local Python system for ATS job-feed ingestion, deterministic role scoring, SQLite-backed tracking, and browser-based workflow automation",
+            "Developed a local Python system for ATS job-feed ingestion, deterministic role scoring, SQLite-backed tracking, and browser-based workflow automation",
             "Implemented resume matching and tailoring pipelines that rank postings by role fit, surface covered/missing keywords, and export formatted DOCX resumes",
             "Added US/remote eligibility filtering, ATS deduplication, status workflows, and one-click export paths to move postings from ingestion to review without spreadsheet handoffs",
         ],
@@ -245,7 +305,7 @@ PROJECT_BANK = [
         "label": "Personal Project",
         "date": "Dec 2023",
         "bullets": [
-            "Built a complete interpreter supporting primitives and continuations",
+            "Implemented a complete interpreter supporting primitives and continuations",
             "Reinforced compiler, runtime, and systems-level design fundamentals",
             "Implemented parser and evaluator flows for Scheme expressions, strengthening recursive evaluation, environment modeling, and interpreter debugging practice",
         ],
@@ -262,6 +322,38 @@ def infer_positioning(text):
     if sre > backend:
         return "software-heavy reliability / infrastructure"
     return "backend distributed systems"
+
+
+def role_title_focus(role):
+    title = (role or "").lower()
+    if "security" in title:
+        return "security"
+    if "site reliability" in title or "sre" in title or "reliability engineer" in title:
+        return "reliability"
+    if "artificial intelligence" in title or "machine learning" in title or " ai " in " " + title + " ":
+        return "ai"
+    if "backend" in title or "back-end" in title:
+        return "backend"
+    if "platform" in title or "infrastructure" in title or "cloud engineer" in title:
+        return "platform"
+    return None
+
+
+def primary_focus(text, role=None):
+    title_focus = role_title_focus(role)
+    if title_focus:
+        return title_focus
+    security_matches = count_matches(text, FOCUS_TERMS["security"])
+    ai_matches = count_matches(text, FOCUS_TERMS["ai"])
+    if len(security_matches) >= 2:
+        return "security"
+    if len(ai_matches) >= 4:
+        return "ai"
+    ranked = []
+    for priority, (focus, terms) in enumerate(FOCUS_TERMS.items()):
+        ranked.append((len(count_matches(text, terms)), -priority, focus))
+    score, _, focus = max(ranked)
+    return focus if score else "platform"
 
 
 def choose_experience_work(text):
@@ -289,12 +381,30 @@ def keywords_to_inject(text):
     return count_matches(text, candidates)
 
 
-def score_bullet(text, bullet):
+def score_bullet(text, bullet, role=None):
     matches = count_matches(text, bullet["terms"])
     theme_matches = count_matches(text, EXPERIENCE_THEMES.get(bullet["theme"], []))
     tag_matches = count_matches(text, [tag.replace("_", " ") for tag in bullet.get("tags") or []])
     required_matches = count_matches(text, bullet.get("required_for") or [])
-    return len(matches) * 3 + len(theme_matches) + len(tag_matches) * 2 + len(required_matches) * 2 + bullet.get("impact", 0) * 2
+    focus = primary_focus(text, role)
+    focus_themes = {
+        "security": {"security/compliance": 12, "observability/data": 4},
+        "ai": {"ai-assisted release operations": 10, "deployment systems": 3},
+        "reliability": {"observability/data": 10, "distributed systems": 8, "deployment systems": 7, "cloud infrastructure": 5},
+        "backend": {"API/platform": 10, "distributed systems": 8, "deployment systems": 6, "observability/data": 3},
+        "platform": {"cloud infrastructure": 10, "API/platform": 8, "deployment systems": 6, "distributed systems": 5},
+    }
+    focus_bonus = focus_themes.get(focus, {}).get(bullet["theme"], 0)
+    focus_penalties = {
+        "ai": {"security/compliance": -5},
+        "reliability": {"security/compliance": -12},
+        "backend": {"security/compliance": -6},
+        "platform": {"security/compliance": -6},
+    }
+    focus_bonus += focus_penalties.get(focus, {}).get(bullet["theme"], 0)
+    if focus == "ai" and bullet["id"] == "ai_release_safeguards":
+        focus_bonus += 8
+    return len(matches) * 3 + len(theme_matches) + len(tag_matches) * 2 + len(required_matches) * 2 + bullet.get("impact", 0) * 2 + focus_bonus
 
 
 def strengthen_platform_framing(text):
@@ -323,35 +433,35 @@ def add_selected(selected, seen, bullet):
     return True
 
 
-def ai_release_ops_target_count(text):
+def ai_release_ops_target_count(text, role=None):
     ai_terms = [
         "ai", "genai", "llm", "rag", "copilot", "agentic", "developer productivity",
         "ai-assisted", "responsible ai",
     ]
-    cloud_terms = ["cloud infrastructure", "platform", "cloud platform", "infrastructure", "api", "service"]
-    release_terms = [
-        "sre", "devops", "release", "release engineering", "observability",
-        "ci/cd", "deployment", "incident", "live site",
-    ]
-    if count_matches(text, ai_terms):
-        return 3
-    if count_matches(text, release_terms):
-        return 4
-    if count_matches(text, cloud_terms):
-        return 3
-    return 2
+    if primary_focus(text, role) == "ai" or len(count_matches(text, ai_terms)) >= 4:
+        return 2
+    title = (role or "").lower()
+    if primary_focus(text, role) == "reliability" or "release" in title or "devops" in title:
+        return 2
+    return 1
 
 
-def tailored_bullets(text, resume_text=None):
+def tailored_bullet_text(text, bullet, role=None):
+    focus = primary_focus(text, role)
+    rendered = (bullet.get("variants") or {}).get(focus) or bullet["text"]
+    return strengthen_platform_framing(rendered)
+
+
+def tailored_bullets(text, resume_text=None, role=None):
     ranked = []
     for bullet in BULLET_BANK:
-        score = score_bullet(text, bullet)
+        score = score_bullet(text, bullet, role)
         ranked.append((score, bullet.get("impact", 0), bullet["id"], bullet))
     ranked.sort(key=lambda item: (item[0], item[1], item[2]), reverse=True)
 
     selected = []
     seen = set()
-    target_ai_release_ops = ai_release_ops_target_count(text)
+    target_ai_release_ops = ai_release_ops_target_count(text, role)
 
     for score, impact, bullet_id, bullet in ranked:
         if len([item for item in selected if is_ai_release_ops_bullet(item)]) >= target_ai_release_ops:
@@ -372,19 +482,21 @@ def tailored_bullets(text, resume_text=None):
             continue
         if is_ai_release_ops_bullet(bullet) and len([item for item in selected if is_ai_release_ops_bullet(item)]) >= target_ai_release_ops:
             continue
+        if len([item for item in selected if item["theme"] == bullet["theme"]]) >= 2:
+            continue
         add_selected(selected, seen, bullet)
         if len(selected) == 5:
             break
 
-    selected.sort(key=lambda bullet: score_bullet(text, bullet), reverse=True)
-    return [strengthen_platform_framing(bullet["text"]) for bullet in selected[:5]]
+    selected.sort(key=lambda bullet: score_bullet(text, bullet, role), reverse=True)
+    return [tailored_bullet_text(text, bullet, role) for bullet in selected[:5]]
 
 
 def tailored_projects(text):
     return PROJECT_BANK[:3]
 
 
-def tailor_resume(text, resume_text=None):
+def tailor_resume(text, resume_text=None, role=None):
     resume = resume_text or BASE_RESUME
     themes = choose_experience_work(text)
     gaps = []
@@ -399,7 +511,7 @@ def tailor_resume(text, resume_text=None):
 
     return {
         "position_as": infer_positioning(text),
-        "rewritten_bullets": tailored_bullets(text, resume),
+        "rewritten_bullets": tailored_bullets(text, resume, role),
         "projects": tailored_projects(text),
         "keywords_to_inject": keywords_to_inject(text),
         "experience_to_emphasize": [item[0] for item in themes],

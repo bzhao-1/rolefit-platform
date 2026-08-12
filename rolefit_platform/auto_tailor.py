@@ -18,7 +18,7 @@ def job_text(job):
 def build_tailored_resume(job, resume_text=None, resume_source=None):
     resume = resume_text or load_resume_text(DEFAULT_RESUME_PATH)
     text = job_text(job)
-    tailored = tailor_resume(text, resume)
+    tailored = tailor_resume(text, resume, job.get("role"))
     match = resume_match(text, resume)
     return {
         "resume_source": resume_source or "built-in sample resume",
