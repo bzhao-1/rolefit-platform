@@ -1,9 +1,29 @@
 import unittest
 
 from rolefit_platform.sources import extract_apple_cards, extract_eightfold_objects
+from rolefit_platform.web import App
 
 
 class SourceParsingTest(unittest.TestCase):
+    def test_home_job_card_has_one_click_stages_and_single_export(self):
+        handler = type("Handler", (), {"path": "/?status=pulled"})()
+        card = App.job_feed_html(handler, [{
+            "id": 42,
+            "company": "ExampleCo",
+            "role": "Backend Engineer I",
+            "location": "Austin, TX",
+            "description": "Backend Java cloud APIs production systems",
+            "score": 70,
+            "status": "saved",
+        }])
+        self.assertEqual(card.count("action='/quick-status'"), 6)
+        self.assertIn("value='contact requested'", card)
+        self.assertIn("value='interview'", card)
+        self.assertIn("value='offer'", card)
+        self.assertIn("/export-resume?job_id=42", card)
+        self.assertNotIn("/export-resumes?limit=25", card)
+        self.assertIn("/?status=pulled", card)
+
     def test_extract_eightfold_objects_from_html_entities(self):
         html = """
         {&#34;id&#34;: 1, &#34;posting_name&#34;: &#34;Software Engineer&#34;,

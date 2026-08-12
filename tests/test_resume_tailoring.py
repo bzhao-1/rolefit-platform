@@ -1,6 +1,10 @@
+import os
+import tempfile
 import unittest
 
 from rolefit_platform.resume import tailor_resume
+from rolefit_platform.resume_export import export_job_resume
+from rolefit_platform.storage import add_job, save_tailored_resume
 
 
 AI_PLATFORM_TEXT = """
@@ -34,6 +38,35 @@ class ResumeTailoringTest(unittest.TestCase):
             "Computer Vision For Autonomous Driving",
             "Scheme Interpreter",
         ])
+
+    def test_single_job_export_writes_only_requested_resume(self):
+        with tempfile.TemporaryDirectory() as directory:
+            db_path = os.path.join(directory, "jobs.sqlite3")
+            output_dir = os.path.join(directory, "exports")
+            first_id = add_job(db_path, {"company": "First Co", "role": "Backend Engineer I", "status": "saved"})
+            second_id = add_job(db_path, {"company": "Second Co", "role": "Platform Engineer I", "status": "saved"})
+            for job_id in [first_id, second_id]:
+                save_tailored_resume(db_path, job_id, {
+                    "resume_source": "saved snapshot",
+                    "resume_match_score": 70,
+                    "readiness": "Strong",
+                    "position_as": "Backend engineer",
+                    "rewritten_bullets": ["Built reliable production systems"],
+                    "projects": [],
+                    "keywords_to_inject": [],
+                    "experience_to_emphasize": [],
+                    "gaps_in_fit": [],
+                    "covered_keywords": [],
+                    "missing_keywords": [],
+                })
+
+            result = export_job_resume(db_path, first_id, output_dir)
+            files = [name for name in os.listdir(output_dir) if name.endswith(".docx")]
+
+            self.assertEqual(result["job_id"], first_id)
+            self.assertEqual(len(files), 1)
+            self.assertIn("First_Co", files[0])
+            self.assertNotIn("Second_Co", files[0])
 
 
 if __name__ == "__main__":

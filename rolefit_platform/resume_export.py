@@ -5,7 +5,7 @@ import zipfile
 from xml.sax.saxutils import escape
 
 from rolefit_platform.auto_tailor import auto_tailor_job
-from rolefit_platform.storage import get_tailored_resume, list_jobs
+from rolefit_platform.storage import get_job, get_tailored_resume, list_jobs
 
 
 DEFAULT_OUTPUT_DIR = "generated_resumes"
@@ -263,22 +263,35 @@ def write_docx(path, job, tailoring):
         docx.writestr("word/numbering.xml", numbering_xml())
 
 
+def export_job_resume(db_path, job_id, output_dir=DEFAULT_OUTPUT_DIR):
+    job = get_job(db_path, job_id)
+    if not job:
+        return None
+    tailoring = get_tailored_resume(db_path, job_id) or auto_tailor_job(db_path, job_id)
+    if not tailoring:
+        return None
+    output_dir = os.path.abspath(output_dir)
+    os.makedirs(output_dir, exist_ok=True)
+    filename = clean_filename(str(job["id"]) + "_" + (job.get("company") or "") + "_" + (job.get("role") or "")) + ".docx"
+    path = os.path.join(output_dir, filename)
+    write_docx(path, job, tailoring)
+    return {
+        "job_id": job["id"],
+        "company": job.get("company"),
+        "role": job.get("role"),
+        "path": path,
+    }
+
+
 def export_finished_resumes(db_path, output_dir=DEFAULT_OUTPUT_DIR, limit=25):
     rows = list_jobs(db_path, limit)
     output_dir = os.path.abspath(output_dir)
     os.makedirs(output_dir, exist_ok=True)
     exported = []
     for job in rows:
-        tailoring = auto_tailor_job(db_path, job["id"]) or get_tailored_resume(db_path, job["id"])
-        filename = clean_filename(str(job["id"]) + "_" + (job.get("company") or "") + "_" + (job.get("role") or "")) + ".docx"
-        path = os.path.join(output_dir, filename)
-        write_docx(path, job, tailoring)
-        exported.append({
-            "job_id": job["id"],
-            "company": job.get("company"),
-            "role": job.get("role"),
-            "path": path,
-        })
+        item = export_job_resume(db_path, job["id"], output_dir)
+        if item:
+            exported.append(item)
     index_path = os.path.join(output_dir, "index.csv")
     with open(index_path, "w", newline="", encoding="utf-8") as handle:
         writer = csv.DictWriter(handle, fieldnames=["job_id", "company", "role", "path"])

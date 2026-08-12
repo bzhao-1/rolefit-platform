@@ -12,7 +12,7 @@ from rolefit_platform.maintenance import cleanup_locations
 from rolefit_platform.prep import interview_prep
 from rolefit_platform.outreach import outreach_message
 from rolefit_platform.resume import tailor_resume
-from rolefit_platform.resume_export import DEFAULT_OUTPUT_DIR, export_finished_resumes
+from rolefit_platform.resume_export import DEFAULT_OUTPUT_DIR, export_finished_resumes, export_job_resume
 from rolefit_platform.resume_match import load_resume_text, resume_match, top_resume_matches
 from rolefit_platform.scraper_agent import recent_agent_runs, run_scraper_once
 from rolefit_platform.sources import DEFAULT_APPLE_SEARCHES, DEFAULT_ASHBY_BOARDS, DEFAULT_EIGHTFOLD_SITES, DEFAULT_GREENHOUSE_BOARDS, DEFAULT_LEVER_SLUGS, DEFAULT_WORKDAY_SITES, GUARDED_SOURCES, SAVED_SEARCH_LINKS, pull_apple, pull_ashby, pull_defaults, pull_greenhouse, pull_lever, pull_workday
@@ -31,6 +31,33 @@ def status_options(current):
     for status in statuses:
         selected = " selected" if status == current_value else ""
         parts.append("<option value=\"" + esc(status) + "\"" + selected + ">" + esc(status) + "</option>")
+    return "".join(parts)
+
+
+def job_quick_actions(row, return_to="/"):
+    stages = [
+        ("saved", "Save"),
+        ("contact requested", "Contact"),
+        ("applied", "Applied"),
+        ("interview", "Interview"),
+        ("offer", "Offer"),
+        ("rejected", "Reject"),
+    ]
+    current = row.get("status") or "pulled"
+    job_id = str(row.get("id"))
+    parts = ["<div class='quick-stages' aria-label='Application stage'>"]
+    for status, label in stages:
+        current_class = " current" if status == current else ""
+        disabled = " disabled" if status == current else ""
+        parts.append(
+            "<form method='post' action='/quick-status'>"
+            "<input type='hidden' name='job_id' value='" + esc(job_id) + "'>"
+            "<input type='hidden' name='status' value='" + esc(status) + "'>"
+            "<input type='hidden' name='return_to' value='" + esc(return_to) + "'>"
+            "<button class='quick-stage" + current_class + "' title='Move to " + esc(label) + "'" + disabled + ">" + esc(label) + "</button>"
+            "</form>"
+        )
+    parts.append("</div>")
     return "".join(parts)
 
 
@@ -226,6 +253,11 @@ def layout(title, body):
     .job-top { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:12px; align-items:start; }
     .company-mark { width:38px; height:38px; border-radius:8px; display:inline-grid; place-items:center; background:linear-gradient(135deg,#1769aa,#18a999); color:white; font-weight:800; }
     .job-actions { display:flex; gap:8px; flex-wrap:wrap; margin-top:10px; }
+    .quick-stages { display:flex; gap:6px; flex-wrap:wrap; align-items:center; margin-top:12px; padding-top:10px; border-top:1px solid var(--line); }
+    .quick-stages form { margin:0; }
+    .quick-stage { min-height:30px; padding:5px 9px; background:#1d2a3a; color:var(--ink); font-size:12px; }
+    .quick-stage:hover { background:#2a3b50; }
+    .quick-stage.current, .quick-stage:disabled { background:#0f3a36; color:#5eead4; cursor:default; opacity:1; }
     .empty { padding:28px; text-align:center; }
     .stage { border-left:4px solid var(--accent); }
     .stage h2 { display:flex; justify-content:space-between; gap:8px; align-items:center; }
@@ -367,6 +399,16 @@ class App(BaseHTTPRequestHandler):
             result = export_finished_resumes(self.db_path, DEFAULT_OUTPUT_DIR, int((params.get("limit") or ["25"])[0]))
             links = "".join("<li><code>" + esc(item["path"]) + "</code></li>" for item in result["exported"])
             self.send_html("<div class='panel'><h1>Finished Resumes Exported</h1><p>Wrote " + str(result["count"]) + " DOCX files to <code>" + esc(result["output_dir"]) + "</code>.</p><ul>" + links + "</ul><p><a class='button' href='/matches'>Back to matches</a></p></div>")
+        elif path == "/export-resume":
+            try:
+                job_id = int((params.get("job_id") or [""])[0])
+            except ValueError:
+                job_id = 0
+            result = export_job_resume(self.db_path, job_id, DEFAULT_OUTPUT_DIR)
+            if not result:
+                self.send_html("<div class='panel'><h1>Resume not exported</h1><p>No job or tailoring data was found.</p><p><a class='button' href='/'>Back to jobs</a></p></div>", "Resume not exported", 404)
+            else:
+                self.send_html("<div class='panel'><h1>Resume Exported</h1><p>Created one resume for <b>" + esc(result.get("company")) + " · " + esc(result.get("role")) + "</b>.</p><p><code>" + esc(result.get("path")) + "</code></p><p><a class='button' href='/job?id=" + str(job_id) + "'>Back to job</a> <a class='button ghost' href='/'>Back to jobs</a></p></div>", "Resume Exported")
         else:
             self.send_html("<div class='panel'><h1>Not found</h1></div>", status=404)
 
@@ -380,6 +422,16 @@ class App(BaseHTTPRequestHandler):
         elif parsed.path == "/update-status":
             update_status(self.db_path, int(data.get("job_id")), data.get("status"), data.get("notes"), data.get("contact"))
             self.redirect("/job?id=" + urllib.parse.quote(data.get("job_id", "")))
+        elif parsed.path == "/quick-status":
+            allowed = {"saved", "contact requested", "applied", "interview", "offer", "rejected"}
+            status = data.get("status") or ""
+            job_id = int(data.get("job_id") or "0")
+            if status in allowed:
+                update_status(self.db_path, job_id, status)
+            return_to = data.get("return_to") or "/"
+            if not return_to.startswith("/") or return_to.startswith("//"):
+                return_to = "/"
+            self.redirect(return_to)
         elif parsed.path == "/drag-status":
             ok = update_status(self.db_path, int(data.get("job_id")), data.get("status"))
             raw = json.dumps({"updated": bool(ok)}).encode("utf-8")
@@ -654,6 +706,7 @@ class App(BaseHTTPRequestHandler):
             company = row.get("company") or "?"
             initials = "".join([part[:1] for part in company.split()[:2]]).upper() or "?"
             apply = "<a class='button ghost' href='" + esc(row.get("link")) + "' target='_blank'>Apply</a>" if row.get("link") else ""
+            quick_actions = job_quick_actions(row, self.path or "/")
             parts.append("""
 <article class="job">
   <div class="job-top">
@@ -679,10 +732,11 @@ class App(BaseHTTPRequestHandler):
     """ + "".join("<span class='pill tag'>" + esc(item) + "</span>" for item in specialty) + """
     """ + "".join("<span class='pill'>" + esc(item) + "</span>" for item in tech[:5]) + """
   </div>
+  """ + quick_actions + """
   <div class="job-actions">
     <a class="button" href="/job?id=""" + str(row["id"]) + """">Review</a>
     """ + apply + """
-    <a class="button ghost" href="/export-resumes?limit=25">Export resumes</a>
+    <a class="button ghost" href="/export-resume?job_id=""" + str(row["id"]) + """">Export resume</a>
   </div>
 </article>""")
         return "".join(parts)
