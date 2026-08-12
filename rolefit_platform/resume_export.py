@@ -2,6 +2,7 @@ import csv
 import os
 import re
 import zipfile
+from xml.etree import ElementTree
 from xml.sax.saxutils import escape
 
 from rolefit_platform.auto_tailor import auto_tailor_job
@@ -9,6 +10,22 @@ from rolefit_platform.storage import get_job, get_tailored_resume, list_jobs
 
 
 DEFAULT_OUTPUT_DIR = "generated_resumes"
+ATS_TEMPLATE_NAME = "ATS-safe single-column resume"
+ATS_REQUIRED_SECTIONS = [
+    "TECHNICAL SKILLS",
+    "PROFESSIONAL EXPERIENCE",
+    "PROJECTS",
+    "EDUCATION",
+    "CERTIFICATIONS & AWARDS",
+]
+ATS_FORBIDDEN_MARKERS = {
+    "tables": "<w:tbl",
+    "drawings": "<w:drawing",
+    "text boxes": "<w:txbxContent",
+    "legacy graphics": "<w:pict",
+    "embedded objects": "<w:object",
+    "alternate rendered content": "<mc:AlternateContent",
+}
 
 
 def clean_filename(value):
@@ -43,25 +60,27 @@ def tab_run():
     return "<w:r><w:tab/></w:r>"
 
 
-def paragraph(text="", style=None, bullet=False, bold=False, italic=False, size=None, align=None, border=False, spacing_after=0, spacing_before=0):
+def paragraph(text="", style=None, bullet=False, bold=False, italic=False, size=None, align=None, border=False, spacing_after=0, spacing_before=0, keep_next=False):
     if bullet:
         text = clean_bullet_text(text)
-    return paragraph_runs([{"text": text, "bold": bold, "italic": italic, "size": size}], style, bullet, align, border, spacing_after=spacing_after, spacing_before=spacing_before)
+    return paragraph_runs([{"text": text, "bold": bold, "italic": italic, "size": size}], style, bullet, align, border, spacing_after=spacing_after, spacing_before=spacing_before, keep_next=keep_next)
 
 
-def paragraph_runs(runs, style=None, bullet=False, align=None, border=False, tab_right=False, spacing_after=0, spacing_before=0):
+def paragraph_runs(runs, style=None, bullet=False, align=None, border=False, tab_right=False, spacing_after=0, spacing_before=0, keep_next=False):
     props = []
     if style:
         props.append('<w:pStyle w:val="' + style + '"/>')
+    if keep_next:
+        props.append("<w:keepNext/>")
     if bullet:
         props.append('<w:numPr><w:ilvl w:val="0"/><w:numId w:val="1"/></w:numPr>')
-    if align:
-        props.append('<w:jc w:val="' + align + '"/>')
-    props.append('<w:spacing w:before="' + str(spacing_before) + '" w:after="' + str(spacing_after) + '" w:line="216" w:lineRule="auto"/>')
-    if tab_right:
-        props.append('<w:tabs><w:tab w:val="right" w:pos="10800"/></w:tabs>')
     if border:
         props.append('<w:pBdr><w:bottom w:val="single" w:sz="8" w:space="1" w:color="000000"/></w:pBdr>')
+    if tab_right:
+        props.append('<w:tabs><w:tab w:val="right" w:pos="10800"/></w:tabs>')
+    props.append('<w:spacing w:before="' + str(spacing_before) + '" w:after="' + str(spacing_after) + '" w:line="216" w:lineRule="auto"/>')
+    if align:
+        props.append('<w:jc w:val="' + align + '"/>')
     ppr = "<w:pPr>" + "".join(props) + "</w:pPr>" if props else ""
     body = []
     for item in runs:
@@ -82,7 +101,7 @@ def section_properties():
 
 
 def section_heading(text):
-    return paragraph(text, style="Heading1", border=True, spacing_before=160, spacing_after=0)
+    return paragraph(text, style="Heading1", border=True, spacing_before=120, spacing_after=0, keep_next=True)
 
 
 def skill_line(label, text):
@@ -97,8 +116,8 @@ def company_line(company, location=None):
         return paragraph_runs([
             {"text": company, "bold": True, "size": 10},
             {"text": " | " + location, "size": 10},
-        ], spacing_after=0)
-    return paragraph(company, bold=True, size=10, spacing_after=0)
+        ], spacing_after=0, keep_next=True)
+    return paragraph(company, bold=True, size=10, spacing_after=0, keep_next=True)
 
 
 def role_line(title, date, trailing=None):
@@ -106,7 +125,7 @@ def role_line(title, date, trailing=None):
     if trailing:
         runs.append({"text": " | " + trailing, "size": 10})
     runs.extend([{"tab": True}, {"text": date, "size": 10}])
-    return paragraph_runs(runs, tab_right=True, spacing_after=0)
+    return paragraph_runs(runs, tab_right=True, spacing_after=0, keep_next=True)
 
 
 def project_line(name, label, date):
@@ -116,7 +135,7 @@ def project_line(name, label, date):
         {"text": label, "italic": True, "size": 10},
         {"tab": True},
         {"text": date, "size": 10},
-    ], tab_right=True, spacing_after=0)
+    ], tab_right=True, spacing_after=0, keep_next=True)
 
 
 def education_line(school, date):
@@ -124,7 +143,7 @@ def education_line(school, date):
         {"text": school, "bold": True, "size": 10},
         {"tab": True},
         {"text": date, "size": 10},
-    ], tab_right=True, spacing_after=0)
+    ], tab_right=True, spacing_after=0, keep_next=True)
 
 
 def document_xml(job, tailoring):
@@ -169,8 +188,8 @@ def document_xml(job, tailoring):
     for project in projects[:3]:
         parts.append(project_line(project.get("name"), project.get("label"), project.get("date")))
         project_bullets = project.get("bullets") or []
-        for index, item in enumerate(project_bullets):
-            spacing = 80 if index == len(project_bullets) - 1 else 0
+        for index, item in enumerate(project_bullets[:2]):
+            spacing = 80 if index == len(project_bullets[:2]) - 1 else 0
             parts.append(paragraph(item, bullet=True, size=10, spacing_after=spacing))
 
     parts.append(section_heading("EDUCATION"))
@@ -215,7 +234,7 @@ def styles_xml():
     <w:next w:val="Normal"/>
     <w:qFormat/>
     <w:pPr><w:spacing w:before="160" w:after="0"/><w:outlineLvl w:val="0"/></w:pPr>
-    <w:rPr><w:b/><w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman"/><w:sz w:val="24"/></w:rPr>
+    <w:rPr><w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman"/><w:b/><w:sz w:val="24"/></w:rPr>
   </w:style>
 </w:styles>"""
 
@@ -238,6 +257,16 @@ def numbering_xml():
 </w:numbering>"""
 
 
+def settings_xml():
+    return """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:settings xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:defaultTabStop w:val="720"/>
+  <w:compat>
+    <w:compatSetting w:name="compatibilityMode" w:uri="http://schemas.microsoft.com/office/word" w:val="15"/>
+  </w:compat>
+</w:settings>"""
+
+
 def write_docx(path, job, tailoring):
     os.makedirs(os.path.dirname(path), exist_ok=True)
     with zipfile.ZipFile(path, "w", compression=zipfile.ZIP_DEFLATED) as docx:
@@ -248,6 +277,7 @@ def write_docx(path, job, tailoring):
   <Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
   <Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/>
   <Override PartName="/word/numbering.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.numbering+xml"/>
+  <Override PartName="/word/settings.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.settings+xml"/>
 </Types>""")
         docx.writestr("_rels/.rels", """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
@@ -257,10 +287,60 @@ def write_docx(path, job, tailoring):
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
   <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>
   <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/numbering" Target="numbering.xml"/>
+  <Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/settings" Target="settings.xml"/>
 </Relationships>""")
         docx.writestr("word/document.xml", document_xml(job, tailoring))
         docx.writestr("word/styles.xml", styles_xml())
         docx.writestr("word/numbering.xml", numbering_xml())
+        docx.writestr("word/settings.xml", settings_xml())
+    validation = validate_ats_docx(path)
+    if not validation["passed"]:
+        raise ValueError("ATS validation failed: " + "; ".join(validation["errors"]))
+    return validation
+
+
+def validate_ats_docx(path):
+    errors = []
+    try:
+        with zipfile.ZipFile(path) as docx:
+            names = set(docx.namelist())
+            required_parts = {"[Content_Types].xml", "word/document.xml", "word/styles.xml"}
+            missing_parts = sorted(required_parts - names)
+            if missing_parts:
+                errors.append("missing DOCX parts: " + ", ".join(missing_parts))
+                return {"passed": False, "errors": errors, "plain_text": ""}
+            document = docx.read("word/document.xml").decode("utf-8")
+    except (OSError, zipfile.BadZipFile, UnicodeDecodeError) as exc:
+        return {"passed": False, "errors": ["invalid DOCX package: " + str(exc)], "plain_text": ""}
+
+    for label, marker in ATS_FORBIDDEN_MARKERS.items():
+        if marker in document:
+            errors.append("contains " + label)
+
+    try:
+        root = ElementTree.fromstring(document)
+        namespace = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
+        paragraphs = []
+        for node in root.iter(namespace + "p"):
+            text = "".join(item.text or "" for item in node.iter(namespace + "t")).strip()
+            if text:
+                paragraphs.append(text)
+        plain_text = "\n".join(paragraphs)
+    except ElementTree.ParseError as exc:
+        return {"passed": False, "errors": ["invalid document XML: " + str(exc)], "plain_text": ""}
+
+    for section in ATS_REQUIRED_SECTIONS:
+        if section not in paragraphs:
+            errors.append("missing section heading: " + section)
+    if len(plain_text) < 500:
+        errors.append("insufficient machine-readable text")
+
+    return {
+        "passed": not errors,
+        "errors": errors,
+        "plain_text": plain_text,
+        "structure": "single-column plain-text DOCX",
+    }
 
 
 def export_job_resume(db_path, job_id, output_dir=DEFAULT_OUTPUT_DIR):
@@ -274,12 +354,14 @@ def export_job_resume(db_path, job_id, output_dir=DEFAULT_OUTPUT_DIR):
     os.makedirs(output_dir, exist_ok=True)
     filename = clean_filename(str(job["id"]) + "_" + (job.get("company") or "") + "_" + (job.get("role") or "")) + ".docx"
     path = os.path.join(output_dir, filename)
-    write_docx(path, job, tailoring)
+    validation = write_docx(path, job, tailoring)
     return {
         "job_id": job["id"],
         "company": job.get("company"),
         "role": job.get("role"),
         "path": path,
+        "template_name": ATS_TEMPLATE_NAME,
+        "ats_validation": validation,
     }
 
 

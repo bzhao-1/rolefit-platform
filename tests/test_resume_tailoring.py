@@ -1,9 +1,10 @@
 import os
 import tempfile
 import unittest
+import zipfile
 
 from rolefit_platform.resume import tailor_resume
-from rolefit_platform.resume_export import export_job_resume
+from rolefit_platform.resume_export import ATS_TEMPLATE_NAME, export_job_resume, validate_ats_docx
 from rolefit_platform.storage import add_job, save_tailored_resume
 
 
@@ -67,6 +68,32 @@ class ResumeTailoringTest(unittest.TestCase):
             self.assertEqual(len(files), 1)
             self.assertIn("First_Co", files[0])
             self.assertNotIn("Second_Co", files[0])
+            self.assertEqual(result["template_name"], ATS_TEMPLATE_NAME)
+            self.assertTrue(result["ats_validation"]["passed"])
+
+            with zipfile.ZipFile(result["path"]) as exported:
+                document = exported.read("word/document.xml").decode("utf-8")
+            plain_text = result["ats_validation"]["plain_text"]
+            self.assertIn("Built reliable production systems", plain_text)
+            self.assertNotIn("<w:tbl", document)
+            self.assertNotIn("<w:drawing", document)
+            self.assertNotIn("<w:txbxContent", document)
+
+    def test_ats_validation_rejects_layout_that_can_hide_reading_order(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = os.path.join(directory, "unsafe.docx")
+            with zipfile.ZipFile(path, "w") as docx:
+                docx.writestr("[Content_Types].xml", "<Types/>")
+                docx.writestr("word/styles.xml", "<w:styles xmlns:w='http://schemas.openxmlformats.org/wordprocessingml/2006/main'/>")
+                docx.writestr(
+                    "word/document.xml",
+                    """<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:tbl/></w:body></w:document>""",
+                )
+
+            result = validate_ats_docx(path)
+
+            self.assertFalse(result["passed"])
+            self.assertIn("contains tables", result["errors"])
 
 
 if __name__ == "__main__":

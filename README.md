@@ -12,7 +12,7 @@ It does not use a hosted model or paid API. The scoring behavior is explicit and
 - Normalizes and deduplicates job records.
 - Scores backend, platform, cloud, reliability, automation, and infrastructure signals.
 - Stores jobs, statuses, notes, contacts, interviews, and tailoring snapshots in SQLite.
-- Compares saved roles with a resume profile and exports tailored DOCX files.
+- Compares saved roles with a resume profile and exports tailored, ATS-safe DOCX files.
 - Provides the same workflow through an `argparse` CLI and dependency-free local dashboard.
 
 ## Architecture
@@ -30,6 +30,8 @@ flowchart LR
 ```
 
 The application separates ingestion, scoring, persistence, presentation, and resume generation so each layer can be tested independently.
+
+Resume exports use a machine-readable, single-column Word layout with standard section headings and no tables, text boxes, drawings, headers, or footers. Every job-specific export runs an ATS structure check before the dashboard reports success.
 
 ## Installation
 

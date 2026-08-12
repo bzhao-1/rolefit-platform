@@ -404,11 +404,17 @@ class App(BaseHTTPRequestHandler):
                 job_id = int((params.get("job_id") or [""])[0])
             except ValueError:
                 job_id = 0
-            result = export_job_resume(self.db_path, job_id, DEFAULT_OUTPUT_DIR)
+            export_error = ""
+            try:
+                result = export_job_resume(self.db_path, job_id, DEFAULT_OUTPUT_DIR)
+            except (FileNotFoundError, ValueError) as exc:
+                result = None
+                export_error = str(exc)
             if not result:
-                self.send_html("<div class='panel'><h1>Resume not exported</h1><p>No job or tailoring data was found.</p><p><a class='button' href='/'>Back to jobs</a></p></div>", "Resume not exported", 404)
+                detail = export_error or "No job or tailoring data was found."
+                self.send_html("<div class='panel'><h1>Resume not exported</h1><p>" + esc(detail) + "</p><p><a class='button' href='/'>Back to jobs</a></p></div>", "Resume not exported", 404)
             else:
-                self.send_html("<div class='panel'><h1>Resume Exported</h1><p>Created one resume for <b>" + esc(result.get("company")) + " · " + esc(result.get("role")) + "</b>.</p><p><code>" + esc(result.get("path")) + "</code></p><p><a class='button' href='/job?id=" + str(job_id) + "'>Back to job</a> <a class='button ghost' href='/'>Back to jobs</a></p></div>", "Resume Exported")
+                self.send_html("<div class='panel'><h1>ATS Resume Exported</h1><p>Created one ATS-safe resume for <b>" + esc(result.get("company")) + " · " + esc(result.get("role")) + "</b>.</p><p><span class='verified'>ATS structure check passed</span></p><p><code>" + esc(result.get("path")) + "</code></p><p><a class='button' href='/job?id=" + str(job_id) + "'>Back to job</a> <a class='button ghost' href='/'>Back to jobs</a></p></div>", "ATS Resume Exported")
         else:
             self.send_html("<div class='panel'><h1>Not found</h1></div>", status=404)
 
@@ -736,7 +742,7 @@ class App(BaseHTTPRequestHandler):
   <div class="job-actions">
     <a class="button" href="/job?id=""" + str(row["id"]) + """">Review</a>
     """ + apply + """
-    <a class="button ghost" href="/export-resume?job_id=""" + str(row["id"]) + """">Export resume</a>
+    <a class="button ghost" href="/export-resume?job_id=""" + str(row["id"]) + """">Export ATS resume</a>
   </div>
 </article>""")
         return "".join(parts)
