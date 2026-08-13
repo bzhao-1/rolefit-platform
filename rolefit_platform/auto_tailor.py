@@ -3,7 +3,10 @@ from rolefit_platform.resume_match import load_resume_text, resume_match
 from rolefit_platform.storage import get_job, list_jobs, list_missing_tailoring_jobs, save_tailored_resume
 
 
-DEFAULT_RESUME_PATH = None
+# Resume baselines are optional and can use independent matching and editable paths.
+CANONICAL_RESUME_FOR_MATCHING = None
+CANONICAL_EDITABLE_RESUME_PATH = None
+DEFAULT_RESUME_PATH = CANONICAL_RESUME_FOR_MATCHING
 
 
 def job_text(job):

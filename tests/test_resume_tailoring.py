@@ -3,6 +3,11 @@ import tempfile
 import unittest
 import zipfile
 
+from rolefit_platform.auto_tailor import (
+    CANONICAL_EDITABLE_RESUME_PATH,
+    CANONICAL_RESUME_FOR_MATCHING,
+    DEFAULT_RESUME_PATH,
+)
 from rolefit_platform.resume import tailor_resume
 from rolefit_platform.resume_export import ATS_TEMPLATE_NAME, export_job_resume, validate_ats_docx
 from rolefit_platform.storage import add_job, save_tailored_resume
@@ -34,6 +39,11 @@ and compliance workflows, and improve audit coverage for cloud infrastructure.
 
 
 class ResumeTailoringTest(unittest.TestCase):
+    def test_resume_paths_are_unset_by_default(self):
+        self.assertIsNone(CANONICAL_RESUME_FOR_MATCHING)
+        self.assertIsNone(CANONICAL_EDITABLE_RESUME_PATH)
+        self.assertIs(DEFAULT_RESUME_PATH, CANONICAL_RESUME_FOR_MATCHING)
+
     def test_ai_release_ops_is_professional_experience_for_ai_platform_roles(self):
         result = tailor_resume(AI_PLATFORM_TEXT)
         bullets = result["rewritten_bullets"]

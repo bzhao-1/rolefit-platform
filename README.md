@@ -33,6 +33,8 @@ The application separates ingestion, scoring, persistence, presentation, and res
 
 Resume exports use a machine-readable, single-column Word layout with standard section headings and no tables, text boxes, drawings, headers, or footers. Every job-specific export runs an ATS structure check before the dashboard reports success.
 
+RoleFit distinguishes the resume used for matching from an editable canonical resume used to start job-specific forks. Both paths are environment-configurable and unset by default; when unset, RoleFit falls back to its built-in sample profile.
+
 ## Installation
 
 Requirements: Python 3.10 or newer.
