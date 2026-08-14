@@ -3,7 +3,7 @@ import tempfile
 import unittest
 
 from rolefit_platform.sources import extract_apple_cards, extract_eightfold_objects
-from rolefit_platform.storage import add_job, find_existing_job, list_jobs, update_status
+from rolefit_platform.storage import add_job, export_jobs, find_existing_job, get_job, list_jobs, update_status
 from rolefit_platform.web import App
 
 
@@ -43,6 +43,40 @@ class SourceParsingTest(unittest.TestCase):
             self.assertTrue(update_status(db_path, job_id, "skipped"))
             self.assertEqual(list_jobs(db_path, 20), [])
             self.assertEqual(find_existing_job(db_path, link=link)["id"], job_id)
+
+    def test_referral_used_is_separate_from_pipeline_status(self):
+        with tempfile.TemporaryDirectory() as directory:
+            db_path = os.path.join(directory, "jobs.sqlite3")
+            job_id = add_job(db_path, {
+                "company": "ExampleCo",
+                "role": "Backend Engineer I",
+                "status": "contact requested",
+            })
+
+            self.assertEqual(get_job(db_path, job_id)["referral_used"], 0)
+            self.assertTrue(update_status(db_path, job_id, "applied", referral_used="yes"))
+            job = get_job(db_path, job_id)
+            self.assertEqual(job["status"], "applied")
+            self.assertEqual(job["referral_used"], 1)
+
+    def test_pipeline_displays_actual_referral_state(self):
+        handler = type("Handler", (), {})()
+        board = App.status_board_html(handler, [{
+            "id": 42,
+            "company": "ExampleCo",
+            "role": "Backend Engineer I",
+            "status": "applied",
+            "referral_used": 1,
+        }])
+        self.assertIn("Referral used YES", board)
+
+    def test_export_includes_referral_used(self):
+        with tempfile.TemporaryDirectory() as directory:
+            db_path = os.path.join(directory, "jobs.sqlite3")
+            output_path = os.path.join(directory, "jobs.csv")
+            export_jobs(db_path, output_path)
+            with open(output_path, encoding="utf-8") as handle:
+                self.assertIn("referral_used", handle.readline())
 
     def test_extract_eightfold_objects_from_html_entities(self):
         html = """

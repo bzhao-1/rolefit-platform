@@ -24,6 +24,21 @@ def esc(value):
     return html.escape(str(value or ""))
 
 
+def referral_state_label(row):
+    if row.get("referral_used"):
+        return "Referral used YES"
+    if row.get("status") == "contact requested":
+        return "Referral requested"
+    if row.get("status") in {"applied", "interview", "offer", "rejected"}:
+        return "Referral used NO"
+    return ""
+
+
+def referral_state_pill(row):
+    label = referral_state_label(row)
+    return "<span class='pill'>" + esc(label) + "</span>" if label else ""
+
+
 def status_options(current):
     statuses = ["saved", "pulled", "contact requested", "applied", "interview", "offer", "rejected", "skipped"]
     current_value = current or "saved"
@@ -433,7 +448,7 @@ class App(BaseHTTPRequestHandler):
         elif parsed.path == "/add-url":
             self.add_from_url(data)
         elif parsed.path == "/update-status":
-            update_status(self.db_path, int(data.get("job_id")), data.get("status"), data.get("notes"), data.get("contact"))
+            update_status(self.db_path, int(data.get("job_id")), data.get("status"), data.get("notes"), data.get("contact"), data.get("referral_used"))
             self.redirect("/job?id=" + urllib.parse.quote(data.get("job_id", "")))
         elif parsed.path == "/quick-status":
             allowed = {"saved", "contact requested", "applied", "interview", "offer", "rejected", "skipped"}
@@ -647,7 +662,7 @@ class App(BaseHTTPRequestHandler):
             parts.append("<div class='status-col' data-status='" + esc(status) + "'><h2>" + esc(label) + "<span class='stage-count'>" + str(len([row for row in rows if row.get("status") == status])) + "</span></h2>")
             if selected:
                 for row in selected:
-                    parts.append("<a class='mini-job' draggable='true' data-job-id='" + str(row.get("id")) + "' href='/job?id=" + str(row.get("id")) + "'>" + esc(row.get("company")) + " · " + esc(row.get("role")) + "<span>" + esc(posted_label(row)) + " · Fit " + str(row.get("score") or 0) + "</span></a>")
+                    parts.append("<a class='mini-job' draggable='true' data-job-id='" + str(row.get("id")) + "' href='/job?id=" + str(row.get("id")) + "'>" + esc(row.get("company")) + " · " + esc(row.get("role")) + "<span>" + esc(posted_label(row)) + " · Fit " + str(row.get("score") or 0) + " · " + esc(referral_state_label(row)) + "</span></a>")
             else:
                 parts.append("<p class='muted empty-status'>Empty</p>")
             parts.append("</div>")
@@ -742,6 +757,7 @@ class App(BaseHTTPRequestHandler):
     <span class="pill">Added """ + esc(display_date(row.get("created_at"))) + """</span>
     <span class="pill">""" + esc(row.get("apply_decision")) + """</span>
     <span class="pill">""" + esc(row.get("status")) + """</span>
+    """ + referral_state_pill(row) + """
     """ + "".join("<span class='pill tag'>" + esc(item) + "</span>" for item in specialty) + """
     """ + "".join("<span class='pill'>" + esc(item) + "</span>" for item in tech[:5]) + """
   </div>
@@ -1069,7 +1085,7 @@ class App(BaseHTTPRequestHandler):
   <div class="panel">
     <h1>""" + esc(job.get("role")) + """</h1>
     <p class="muted">""" + esc(job.get("company")) + """ · """ + esc(job.get("location")) + """</p>
-    <p><span class="pill score">Score """ + str(job.get("score") or 0) + """</span><span class="pill">Infra """ + str(job.get("infrastructure_alignment_score") or 0) + """</span><span class="pill">""" + esc(job.get("apply_decision")) + """</span><span class="pill">""" + esc(job.get("status")) + """</span><span class="pill">""" + esc(posted_label(job)) + """</span><span class="pill">Source """ + esc(job.get("source") or "manual") + """</span></p>
+    <p><span class="pill score">Score """ + str(job.get("score") or 0) + """</span><span class="pill">Infra """ + str(job.get("infrastructure_alignment_score") or 0) + """</span><span class="pill">""" + esc(job.get("apply_decision")) + """</span><span class="pill">""" + esc(job.get("status")) + """</span>""" + referral_state_pill(job) + """<span class="pill">""" + esc(posted_label(job)) + """</span><span class="pill">Source """ + esc(job.get("source") or "manual") + """</span></p>
     <p>""" + ("<a class='button ghost' target='_blank' href='" + esc(job.get("link")) + "'>Open posting</a>" if job.get("link") else "") + """</p>
     <h2>Decision Reasoning</h2><p>""" + esc(classified["reasoning"]) + """</p>
     <h2>Current Resume Match</h2><p><b>""" + str(match["resume_match_score"]) + """/100</b> · """ + esc(match["readiness"]) + """</p>
@@ -1100,6 +1116,10 @@ class App(BaseHTTPRequestHandler):
         """ + status_options(job.get("status")) + """
       </select>
       <label>Contact</label><input name="contact" value=\"""" + esc(job.get("contact")) + """\">
+      <label>Referral used</label><select name="referral_used">
+        <option value="no""" + (" selected" if not job.get("referral_used") else "") + """>No</option>
+        <option value="yes""" + (" selected" if job.get("referral_used") else "") + """>Yes</option>
+      </select>
       <label>Notes</label><textarea name="notes">""" + esc(job.get("notes")) + """</textarea>
       <p><button>Update</button></p>
     </form>

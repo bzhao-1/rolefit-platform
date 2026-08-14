@@ -15,6 +15,7 @@ create table if not exists jobs (
     infrastructure_alignment_score integer,
     apply_decision text,
     contact text,
+    referral_used integer default 0,
     status text default 'saved',
     posted_at text,
     source text,
@@ -92,6 +93,7 @@ def connect(path):
     ensure_column(conn, "tailored_resumes", "projects", "text")
     ensure_column(conn, "jobs", "posted_at", "text")
     ensure_column(conn, "jobs", "source", "text")
+    ensure_column(conn, "jobs", "referral_used", "integer default 0")
     return conn
 
 
@@ -107,8 +109,8 @@ def add_job(db_path, job):
     cur = conn.execute(
         """
         insert into jobs
-        (company, role, location, link, description, score, infrastructure_alignment_score, apply_decision, contact, status, posted_at, source, notes)
-        values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        (company, role, location, link, description, score, infrastructure_alignment_score, apply_decision, contact, referral_used, status, posted_at, source, notes)
+        values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             job.get("company"),
@@ -120,6 +122,7 @@ def add_job(db_path, job):
             job.get("infrastructure_alignment_score"),
             job.get("apply_decision"),
             job.get("contact"),
+            normalize_referral_used(job.get("referral_used")),
             job.get("status", "saved"),
             job.get("posted_at"),
             job.get("source"),
@@ -292,7 +295,13 @@ def stats(db_path):
     }
 
 
-def update_status(db_path, job_id, status, notes=None, contact=None):
+def normalize_referral_used(value):
+    if isinstance(value, str):
+        return 1 if value.strip().lower() in {"1", "true", "yes", "y", "used"} else 0
+    return 1 if value else 0
+
+
+def update_status(db_path, job_id, status, notes=None, contact=None, referral_used=None):
     conn = connect(db_path)
     current = get_job(db_path, job_id)
     if not current:
@@ -304,10 +313,11 @@ def update_status(db_path, job_id, status, notes=None, contact=None):
         set status = ?,
             notes = coalesce(?, notes),
             contact = coalesce(?, contact),
+            referral_used = coalesce(?, referral_used),
             updated_at = current_timestamp
         where id = ?
         """,
-        (status, notes, contact, job_id),
+        (status, notes, contact, None if referral_used is None else normalize_referral_used(referral_used), job_id),
     )
     conn.commit()
     conn.close()
@@ -461,7 +471,7 @@ def export_jobs(db_path, output_path):
         writer = csv.DictWriter(handle, fieldnames=rows[0].keys() if rows else [
             "id", "company", "role", "location", "link", "description", "score",
             "infrastructure_alignment_score", "apply_decision", "contact", "status",
-            "notes", "created_at", "updated_at",
+            "referral_used", "notes", "created_at", "updated_at",
         ])
         writer.writeheader()
         for row in rows:
