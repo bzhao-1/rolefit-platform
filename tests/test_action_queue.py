@@ -46,21 +46,27 @@ class ActionQueueTest(unittest.TestCase):
         finally:
             os.remove(db_path)
 
-    def test_status_page_queue_groups_explicit_actions(self):
-        rows = [
-            {"id": 1, "company": "Submit Co", "role": "Engineer", "status": "saved", "next_action": "SUBMIT", "queue_priority": "HIGH"},
-            {"id": 2, "company": "Referral Co", "role": "Engineer", "status": "contact requested", "next_action": "SEEK_REFERRAL", "queue_priority": "VERY HIGH"},
-            {"id": 3, "company": "Waiting Co", "role": "Engineer", "status": "applied", "next_action": "WAIT", "queue_priority": "MEDIUM", "referral_used": 1},
-            {"id": 4, "company": "Skipped Co", "role": "Engineer", "status": "skipped", "next_action": "NONE", "queue_priority": "NONE"},
-        ]
-        output = App.action_queue_html(rows)
-        for heading in ["Apply Now", "Referral First", "Waiting", "Skip"]:
-            self.assertIn(heading, output)
-        for company in ["Submit Co", "Referral Co", "Waiting Co", "Skipped Co"]:
-            self.assertIn(company, output)
-        self.assertIn("Referral needed YES", output)
-        self.assertIn("Referral used YES", output)
-
+    def test_status_page_does_not_render_action_queue(self):
+        handle, db_path = tempfile.mkstemp(suffix=".sqlite3")
+        os.close(handle)
+        try:
+            add_job(db_path, {
+                "company": "ExampleCo",
+                "role": "Software Engineer I",
+                "status": "saved",
+                "next_action": "SUBMIT",
+                "queue_priority": "HIGH",
+            })
+            captured = {}
+            handler = object.__new__(App)
+            handler.db_path = db_path
+            handler.send_html = lambda body, title=None: captured.update(body=body, title=title)
+            handler.status_page({})
+            self.assertIn("Application Status", captured["body"])
+            self.assertNotIn("Action Queue", captured["body"])
+            self.assertNotIn("Next SUBMIT", captured["body"])
+        finally:
+            os.remove(db_path)
 
 if __name__ == "__main__":
     unittest.main()

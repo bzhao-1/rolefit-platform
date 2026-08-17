@@ -6,7 +6,6 @@ import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from datetime import datetime
 
-from rolefit_platform.action_queue import NEXT_ACTIONS, QUEUE_GROUPS, QUEUE_PRIORITIES, action_queue_group, action_queue_rows
 from rolefit_platform.auto_tailor import DEFAULT_RESUME_PATH, auto_tailor_job, auto_tailor_jobs
 from rolefit_platform.classifier import classify_job
 from rolefit_platform.maintenance import cleanup_locations
@@ -17,7 +16,7 @@ from rolefit_platform.resume_export import DEFAULT_OUTPUT_DIR, export_finished_r
 from rolefit_platform.resume_match import load_resume_text, resume_match, top_resume_matches
 from rolefit_platform.scraper_agent import recent_agent_runs, run_scraper_once
 from rolefit_platform.sources import DEFAULT_APPLE_SEARCHES, DEFAULT_ASHBY_BOARDS, DEFAULT_EIGHTFOLD_SITES, DEFAULT_GREENHOUSE_BOARDS, DEFAULT_LEVER_SLUGS, DEFAULT_WORKDAY_SITES, GUARDED_SOURCES, SAVED_SEARCH_LINKS, pull_apple, pull_ashby, pull_defaults, pull_greenhouse, pull_lever, pull_workday
-from rolefit_platform.storage import add_interview, add_job, export_jobs, get_job, get_tailored_resume, list_action_queue_jobs, list_interviews, list_jobs, stats, update_interview, update_status
+from rolefit_platform.storage import add_interview, add_job, export_jobs, get_job, get_tailored_resume, list_interviews, list_jobs, stats, update_interview, update_status
 from rolefit_platform.text_utils import load_text_from_url
 
 
@@ -294,14 +293,6 @@ def layout(title, body):
     .mini-job:active { cursor:grabbing; }
     .mini-job.dragging { opacity:.55; }
     .mini-job span { display:block; font-size:12px; color:var(--muted); margin-top:2px; }
-    .action-queue { margin-bottom:16px; }
-    .queue-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; }
-    .queue-col { min-width:0; padding:10px; border:1px solid var(--line); border-radius:8px; background:rgba(17,26,36,.82); }
-    .queue-col h3 { display:flex; justify-content:space-between; gap:8px; margin:0 0 8px; font-size:14px; }
-    .queue-card { padding:9px 0; border-top:1px solid var(--line); }
-    .queue-card:first-of-type { border-top:0; padding-top:0; }
-    .queue-card a { color:var(--ink); font-weight:700; text-decoration:none; }
-    .queue-card p { margin:4px 0 0; font-size:12px; }
     .agent-log { max-height:220px; overflow:auto; }
     .split { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
     .score { color:var(--good); }
@@ -309,7 +300,7 @@ def layout(title, body):
     .bad { color:var(--bad); }
     pre { white-space:pre-wrap; background:#0d1621; border:1px solid var(--line); border-radius:8px; padding:12px; overflow:auto; }
     ul { margin-top:6px; padding-left:20px; }
-    @media (max-width: 900px) { .grid, .stats, .three, .hero, .split, .feed-shell, .job-top, .status-board { grid-template-columns:1fr; } .queue-grid { grid-template-columns:repeat(4,minmax(230px,1fr)); overflow-x:auto; padding-bottom:6px; } nav { overflow:auto; } .filters { position:static; } }
+    @media (max-width: 900px) { .grid, .stats, .three, .hero, .split, .feed-shell, .job-top, .status-board { grid-template-columns:1fr; } nav { overflow:auto; } .filters { position:static; } }
   </style>
 </head>
 <body>
@@ -464,8 +455,6 @@ class App(BaseHTTPRequestHandler):
                 data.get("notes"),
                 data.get("contact"),
                 data.get("referral_used"),
-                data.get("next_action"),
-                data.get("queue_priority"),
             )
             self.redirect("/job?id=" + urllib.parse.quote(data.get("job_id", "")))
         elif parsed.path == "/quick-status":
@@ -687,39 +676,8 @@ class App(BaseHTTPRequestHandler):
         parts.append("</section>")
         return "".join(parts)
 
-    @staticmethod
-    def action_queue_html(rows):
-        ordered = action_queue_rows(rows)
-        parts = [
-            "<section class='action-queue'><div class='feed-head'><h2>Action Queue</h2>"
-            "<span class='muted'>Explicit next steps only</span></div><div class='queue-grid'>"
-        ]
-        for group_key, label, _actions in QUEUE_GROUPS:
-            selected = [row for row in ordered if action_queue_group(row.get("next_action")) == group_key]
-            parts.append(
-                "<div class='queue-col'><h3>" + esc(label)
-                + "<span class='stage-count'>" + str(len(selected)) + "</span></h3>"
-            )
-            if not selected:
-                parts.append("<p class='muted'>Empty</p>")
-            for row in selected:
-                referral_needed = "YES" if row.get("next_action") == "SEEK_REFERRAL" else "NO"
-                parts.append(
-                    "<article class='queue-card'><a href='/job?id=" + str(row.get("id")) + "'>"
-                    + esc(row.get("company")) + " · " + esc(row.get("role")) + "</a>"
-                    + "<p class='muted'>" + esc(row.get("location")) + " · " + esc(posted_label(row)) + "</p>"
-                    + "<p><span class='pill'>" + esc(row.get("next_action")) + "</span>"
-                    + "<span class='pill'>Priority " + esc(row.get("queue_priority") or "NONE") + "</span></p>"
-                    + "<p class='muted'>" + esc(row.get("status")) + " · Referral needed " + referral_needed
-                    + " · " + esc(referral_state_label(row) or "Referral used NO") + "</p></article>"
-                )
-            parts.append("</div>")
-        parts.append("</div></section>")
-        return "".join(parts)
-
     def status_page(self, params):
         rows = list_jobs(self.db_path, 500)
-        queue_rows = list_action_queue_jobs(self.db_path, 500)
         interviews = list_interviews(self.db_path, 50)
         body = """
 <section class="hero">
@@ -729,7 +687,7 @@ class App(BaseHTTPRequestHandler):
   </div>
   <a class="button" href="/">Back to job feed</a>
 </section>
-""" + self.action_queue_html(queue_rows) + self.status_board_html(rows) + """
+""" + self.status_board_html(rows) + """
 <div class="grid">
   <section class="panel">
     <h2>Interview Rounds</h2>
@@ -806,8 +764,6 @@ class App(BaseHTTPRequestHandler):
     <span class="pill">Added """ + esc(display_date(row.get("created_at"))) + """</span>
     <span class="pill">""" + esc(row.get("apply_decision")) + """</span>
     <span class="pill">""" + esc(row.get("status")) + """</span>
-    """ + ("<span class='pill score'>Next " + esc(row.get("next_action")) + "</span>" if row.get("next_action") else "") + """
-    """ + ("<span class='pill'>Queue " + esc(row.get("queue_priority")) + "</span>" if row.get("queue_priority") else "") + """
     """ + referral_state_pill(row) + """
     """ + "".join("<span class='pill tag'>" + esc(item) + "</span>" for item in specialty) + """
     """ + "".join("<span class='pill'>" + esc(item) + "</span>" for item in tech[:5]) + """
@@ -1136,7 +1092,7 @@ class App(BaseHTTPRequestHandler):
   <div class="panel">
     <h1>""" + esc(job.get("role")) + """</h1>
     <p class="muted">""" + esc(job.get("company")) + """ · """ + esc(job.get("location")) + """</p>
-    <p><span class="pill score">Score """ + str(job.get("score") or 0) + """</span><span class="pill">Infra """ + str(job.get("infrastructure_alignment_score") or 0) + """</span><span class="pill">""" + esc(job.get("apply_decision")) + """</span><span class="pill">""" + esc(job.get("status")) + """</span>""" + referral_state_pill(job) + ("<span class='pill score'>Next " + esc(job.get("next_action")) + "</span>" if job.get("next_action") else "") + ("<span class='pill'>Queue " + esc(job.get("queue_priority")) + "</span>" if job.get("queue_priority") else "") + """<span class="pill">""" + esc(posted_label(job)) + """</span><span class="pill">Source """ + esc(job.get("source") or "manual") + """</span></p>
+    <p><span class="pill score">Score """ + str(job.get("score") or 0) + """</span><span class="pill">Infra """ + str(job.get("infrastructure_alignment_score") or 0) + """</span><span class="pill">""" + esc(job.get("apply_decision")) + """</span><span class="pill">""" + esc(job.get("status")) + """</span>""" + referral_state_pill(job) + """<span class="pill">""" + esc(posted_label(job)) + """</span><span class="pill">Source """ + esc(job.get("source") or "manual") + """</span></p>
     <p>""" + ("<a class='button ghost' target='_blank' href='" + esc(job.get("link")) + "'>Open posting</a>" if job.get("link") else "") + """</p>
     <h2>Decision Reasoning</h2><p>""" + esc(classified["reasoning"]) + """</p>
     <h2>Current Resume Match</h2><p><b>""" + str(match["resume_match_score"]) + """/100</b> · """ + esc(match["readiness"]) + """</p>
@@ -1170,12 +1126,6 @@ class App(BaseHTTPRequestHandler):
       <label>Referral used</label><select name="referral_used">
         <option value="no""" + (" selected" if not job.get("referral_used") else "") + """>No</option>
         <option value="yes""" + (" selected" if job.get("referral_used") else "") + """>Yes</option>
-      </select>
-      <label>Next action</label><select name="next_action">
-        """ + self.option_html([""] + list(NEXT_ACTIONS), job.get("next_action") or "", "Not queued") + """
-      </select>
-      <label>Queue priority</label><select name="queue_priority">
-        """ + self.option_html([""] + list(QUEUE_PRIORITIES), job.get("queue_priority") or "", "Unspecified") + """
       </select>
       <label>Notes</label><textarea name="notes">""" + esc(job.get("notes")) + """</textarea>
       <p><button>Update</button></p>

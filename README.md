@@ -13,8 +13,7 @@ It does not use a hosted model or paid API. The scoring behavior is explicit and
 - Scores backend, platform, cloud, reliability, automation, and infrastructure signals.
 - Stores jobs, statuses, notes, contacts, actual referral usage, explicit next actions, queue priorities, interviews, and tailoring snapshots in SQLite.
 
-Referral usage is tracked separately from the referral/contact pipeline stage, so an applied job can record whether an employee referral was actually used.
-The Status page groups only explicitly queued jobs into Apply Now, Referral First, Waiting, and Skip. Queue ordering is independent of the global fit score and feed ordering.
+Referral usage is tracked separately from the referral/contact pipeline stage, so an applied job can record whether an employee referral was actually used. Optional next-action metadata remains available through the CLI and CSV export without adding a second workflow to the Status UI.
 - Compares saved roles with a resume profile and exports tailored, ATS-safe DOCX files.
 - Provides the same workflow through an `argparse` CLI and dependency-free local dashboard.
 
