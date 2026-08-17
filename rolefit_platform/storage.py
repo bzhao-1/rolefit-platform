@@ -2,6 +2,7 @@ import csv
 import json
 import sqlite3
 
+from rolefit_platform.action_queue import normalize_next_action, normalize_queue_priority
 
 JOBS_SCHEMA = """
 create table if not exists jobs (
@@ -17,6 +18,8 @@ create table if not exists jobs (
     contact text,
     referral_used integer default 0,
     status text default 'saved',
+    next_action text,
+    queue_priority text,
     posted_at text,
     source text,
     notes text,
@@ -94,6 +97,8 @@ def connect(path):
     ensure_column(conn, "jobs", "posted_at", "text")
     ensure_column(conn, "jobs", "source", "text")
     ensure_column(conn, "jobs", "referral_used", "integer default 0")
+    ensure_column(conn, "jobs", "next_action", "text")
+    ensure_column(conn, "jobs", "queue_priority", "text")
     return conn
 
 
@@ -109,8 +114,8 @@ def add_job(db_path, job):
     cur = conn.execute(
         """
         insert into jobs
-        (company, role, location, link, description, score, infrastructure_alignment_score, apply_decision, contact, referral_used, status, posted_at, source, notes)
-        values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        (company, role, location, link, description, score, infrastructure_alignment_score, apply_decision, contact, referral_used, status, next_action, queue_priority, posted_at, source, notes)
+        values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             job.get("company"),
@@ -124,6 +129,8 @@ def add_job(db_path, job):
             job.get("contact"),
             normalize_referral_used(job.get("referral_used")),
             job.get("status", "saved"),
+            normalize_next_action(job.get("next_action")),
+            normalize_queue_priority(job.get("queue_priority")),
             job.get("posted_at"),
             job.get("source"),
             job.get("notes"),
@@ -280,6 +287,16 @@ def list_jobs(db_path, limit=50, status=None):
     return [dict(row) for row in rows]
 
 
+def list_action_queue_jobs(db_path, limit=500):
+    conn = connect(db_path)
+    rows = conn.execute(
+        "select * from jobs where next_action is not null order by id limit ?",
+        (limit,),
+    ).fetchall()
+    conn.close()
+    return [dict(row) for row in rows]
+
+
 def stats(db_path):
     conn = connect(db_path)
     rows = conn.execute("select status, count(*) as count from jobs group by status").fetchall()
@@ -301,12 +318,23 @@ def normalize_referral_used(value):
     return 1 if value else 0
 
 
-def update_status(db_path, job_id, status, notes=None, contact=None, referral_used=None):
+def update_status(
+    db_path,
+    job_id,
+    status,
+    notes=None,
+    contact=None,
+    referral_used=None,
+    next_action=None,
+    queue_priority=None,
+):
     conn = connect(db_path)
     current = get_job(db_path, job_id)
     if not current:
         conn.close()
         return False
+    clear_next_action = isinstance(next_action, str) and not next_action.strip()
+    clear_queue_priority = isinstance(queue_priority, str) and not queue_priority.strip()
     conn.execute(
         """
         update jobs
@@ -314,10 +342,22 @@ def update_status(db_path, job_id, status, notes=None, contact=None, referral_us
             notes = coalesce(?, notes),
             contact = coalesce(?, contact),
             referral_used = coalesce(?, referral_used),
+            next_action = case when ? then null else coalesce(?, next_action) end,
+            queue_priority = case when ? then null else coalesce(?, queue_priority) end,
             updated_at = current_timestamp
         where id = ?
         """,
-        (status, notes, contact, None if referral_used is None else normalize_referral_used(referral_used), job_id),
+        (
+            status,
+            notes,
+            contact,
+            None if referral_used is None else normalize_referral_used(referral_used),
+            clear_next_action,
+            normalize_next_action(next_action),
+            clear_queue_priority,
+            normalize_queue_priority(queue_priority),
+            job_id,
+        ),
     )
     conn.commit()
     conn.close()
@@ -471,7 +511,7 @@ def export_jobs(db_path, output_path):
         writer = csv.DictWriter(handle, fieldnames=rows[0].keys() if rows else [
             "id", "company", "role", "location", "link", "description", "score",
             "infrastructure_alignment_score", "apply_decision", "contact", "status",
-            "referral_used", "notes", "created_at", "updated_at",
+            "referral_used", "next_action", "queue_priority", "notes", "created_at", "updated_at",
         ])
         writer.writeheader()
         for row in rows:

@@ -11,9 +11,10 @@ It does not use a hosted model or paid API. The scoring behavior is explicit and
 - Ingests public Greenhouse, Lever, Eightfold, Workday CXS, Ashby, and HTML career listings.
 - Normalizes and deduplicates job records.
 - Scores backend, platform, cloud, reliability, automation, and infrastructure signals.
-- Stores jobs, statuses, notes, contacts, actual referral usage, interviews, and tailoring snapshots in SQLite.
+- Stores jobs, statuses, notes, contacts, actual referral usage, explicit next actions, queue priorities, interviews, and tailoring snapshots in SQLite.
 
 Referral usage is tracked separately from the referral/contact pipeline stage, so an applied job can record whether an employee referral was actually used.
+The Status page groups only explicitly queued jobs into Apply Now, Referral First, Waiting, and Skip. Queue ordering is independent of the global fit score and feed ordering.
 - Compares saved roles with a resume profile and exports tailored, ATS-safe DOCX files.
 - Provides the same workflow through an `argparse` CLI and dependency-free local dashboard.
 
@@ -90,6 +91,15 @@ Run one ingestion and scoring cycle:
 
 ```bash
 rolefit-platform scrape-agent --once --limit 50
+```
+
+Set an explicit next action without changing role scoring:
+
+```bash
+rolefit-platform update-status 1 \
+  --status "contact requested" \
+  --next-action SEEK_REFERRAL \
+  --queue-priority HIGH
 ```
 
 Export tracked roles:

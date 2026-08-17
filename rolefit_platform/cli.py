@@ -170,7 +170,16 @@ def command_list_top(args):
 
 def command_update_status(args):
     ensure_db_dir(args.db)
-    ok = update_status(args.db, args.job_id, args.status, args.notes, args.contact, args.referral_used)
+    ok = update_status(
+        args.db,
+        args.job_id,
+        args.status,
+        args.notes,
+        args.contact,
+        args.referral_used,
+        args.next_action,
+        args.queue_priority,
+    )
     if not ok:
         raise SystemExit("No job found with id " + str(args.job_id))
     print_json({"id": args.job_id, "status": args.status, "updated": True})
@@ -342,6 +351,8 @@ def build_parser():
     update.add_argument("--notes")
     update.add_argument("--contact")
     update.add_argument("--referral-used", choices=["yes", "no"])
+    update.add_argument("--next-action", choices=["SUBMIT", "SEEK_REFERRAL", "REVIEW_JD", "WAIT", "FOLLOW_UP", "NONE"])
+    update.add_argument("--queue-priority", choices=["VERY HIGH", "HIGH", "MEDIUM", "LOW", "NONE"])
     update.set_defaults(func=command_update_status)
 
     export = sub.add_parser("export", help="Export tracker to CSV")
