@@ -14,7 +14,7 @@ It does not use a hosted model or paid API. The scoring behavior is explicit and
 - Stores jobs, statuses, notes, contacts, actual referral usage, explicit next actions, queue priorities, interviews, and tailoring snapshots in SQLite.
 
 Referral usage is tracked separately from the referral/contact pipeline stage, so an applied job can record whether an employee referral was actually used. Optional next-action metadata remains available through the CLI and CSV export without adding a second workflow to the Status UI.
-- Compares saved roles with a resume profile and exports tailored, ATS-safe DOCX files.
+- Compares saved roles with a resume profile and exports evidence-backed, ATS-safe DOCX files.
 - Provides the same workflow through an `argparse` CLI and dependency-free local dashboard.
 
 ## Architecture
@@ -33,9 +33,11 @@ flowchart LR
 
 The application separates ingestion, scoring, persistence, presentation, and resume generation so each layer can be tested independently.
 
-Resume exports use a machine-readable, single-column Word layout with standard section headings and no tables, text boxes, drawings, headers, or footers. Every job-specific export runs an ATS structure check before the dashboard reports success.
+Resume exports copy and patch a user-supplied canonical DOCX rather than reconstructing its layout. The package, hyperlinks, margins, fonts, and section order remain intact while approved evidence-backed bullets are selected for the target role. RoleFit then renders the result with LibreOffice and refuses the export unless it is exactly one page, every bullet fits on one rendered line, required ATS sections remain readable, and no content crosses the page boundary.
 
-RoleFit distinguishes the resume used for matching from an editable canonical resume used to start job-specific forks. Both paths are environment-configurable and unset by default; when unset, RoleFit falls back to its built-in sample profile.
+Matching can use the built-in sample profile, but exporting requires an explicit editable template. Set `ROLEFIT_CANONICAL_RESUME` to an ATS-safe one-page DOCX. Optionally set `ROLEFIT_RESUME_FOR_MATCHING` to a different DOCX, PDF, or text resume. LibreOffice, `pdfinfo`, and `pdftotext` must be available for rendered validation.
+
+Tailoring stores the evidence identifier, source fact, approved metrics, approved keywords, action verb, and approved concise variants behind every selected bullet. Job-description terms unsupported by that evidence are reported as gaps instead of being inserted into the resume.
 
 ## Installation
 
@@ -107,6 +109,23 @@ Export tracked roles:
 rolefit-platform export --output job_tracker_export.csv
 ```
 
+Configure a canonical resume, add a role, and export only that role's resume:
+
+```bash
+export ROLEFIT_CANONICAL_RESUME="$HOME/Documents/resume/Canonical_Resume.docx"
+
+rolefit-platform add-job \
+  --company "Example Cloud Co." \
+  --role "Software Engineer I" \
+  --url "https://example.com/jobs/123"
+
+rolefit-platform export-resume \
+  --job-id 1 \
+  --output-dir generated_resumes
+```
+
+The generated DOCX has already passed the automated LibreOffice gate. Open it once in Microsoft Word before submitting because Word and LibreOffice can make slightly different line-breaking decisions.
+
 ## Scoring model
 
 The scorer rewards explicit evidence of backend/platform ownership, distributed systems, cloud infrastructure, orchestration, reliability, deployment automation, testing, observability, security, and data pipelines. It also considers role level and location eligibility.
@@ -147,7 +166,7 @@ rolefit_platform/
   storage.py         SQLite persistence and CSV export
   scraper_agent.py   repeated ingestion workflow
   resume_match.py    resume-to-role comparison
-  resume_export.py   DOCX generation
+  resume_export.py   canonical DOCX patching and rendered validation
   cli.py             command-line interface
   web.py             local browser interface
 examples/
@@ -156,7 +175,7 @@ tests/
 
 ## Privacy
 
-Local databases, generated resumes, and exports are ignored by Git. Review generated artifacts before sharing them.
+Local databases, canonical templates, generated resumes, and exports are ignored by Git. Review generated artifacts before sharing them.
 
 ## License
 

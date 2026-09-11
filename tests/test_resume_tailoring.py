@@ -8,9 +8,9 @@ from rolefit_platform.auto_tailor import (
     CANONICAL_RESUME_FOR_MATCHING,
     DEFAULT_RESUME_PATH,
 )
-from rolefit_platform.resume import tailor_resume
-from rolefit_platform.resume_export import ATS_TEMPLATE_NAME, export_job_resume, validate_ats_docx
-from rolefit_platform.storage import add_job, save_tailored_resume
+from rolefit_platform.resume import ACTION_VERBS, UNSUPPORTED_KEYWORDS, tailor_resume
+from rolefit_platform.resume_export import export_job_resume, validate_ats_docx
+from rolefit_platform.storage import add_job
 
 
 AI_PLATFORM_TEXT = """
@@ -45,7 +45,7 @@ class ResumeTailoringTest(unittest.TestCase):
         self.assertIs(DEFAULT_RESUME_PATH, CANONICAL_RESUME_FOR_MATCHING)
 
     def test_ai_release_ops_is_professional_experience_for_ai_platform_roles(self):
-        result = tailor_resume(AI_PLATFORM_TEXT)
+        result = tailor_resume(AI_PLATFORM_TEXT + " RAG")
         bullets = result["rewritten_bullets"]
         joined = " ".join(bullets).lower()
 
@@ -57,6 +57,9 @@ class ResumeTailoringTest(unittest.TestCase):
         self.assertNotIn("shepherd", joined)
         self.assertNotIn("bgp", joined)
         self.assertTrue(any("200+ test suites" in item for item in bullets))
+        self.assertIn("RAG", result["gap_keywords"])
+        self.assertIn("gRPC", result["gap_keywords"])
+        self.assertNotIn("RAG", result["supported_keywords_to_surface"])
 
         project_names = [project["name"] for project in result["projects"]]
         self.assertEqual(project_names, [
@@ -86,44 +89,27 @@ class ResumeTailoringTest(unittest.TestCase):
         self.assertTrue(any("observability views" in bullet for bullet in sre))
         self.assertTrue(any("vulnerability signals" in bullet for bullet in security))
 
-    def test_single_job_export_writes_only_requested_resume(self):
+    def test_every_selected_bullet_has_evidence_and_an_action_verb(self):
+        result = tailor_resume(BACKEND_TEXT)
+        for record in result["rewritten_bullet_records"]:
+            self.assertTrue(record["evidence_id"])
+            self.assertTrue(record["source"])
+            self.assertTrue(record["fact"])
+            self.assertIn(record["text"].split()[0], ACTION_VERBS)
+            self.assertIn(record["text"], record["approved_variants"])
+
+    def test_unsupported_keywords_are_never_surfaced(self):
+        result = tailor_resume(" ".join(UNSUPPORTED_KEYWORDS))
+        self.assertFalse(set(result["supported_keywords_to_surface"]) & set(UNSUPPORTED_KEYWORDS))
+        self.assertTrue(set(result["gap_keywords"]) & set(UNSUPPORTED_KEYWORDS))
+
+    def test_export_fails_clearly_without_a_canonical_docx(self):
         with tempfile.TemporaryDirectory() as directory:
             db_path = os.path.join(directory, "jobs.sqlite3")
             output_dir = os.path.join(directory, "exports")
             first_id = add_job(db_path, {"company": "First Co", "role": "Backend Engineer I", "status": "saved"})
-            second_id = add_job(db_path, {"company": "Second Co", "role": "Platform Engineer I", "status": "saved"})
-            for job_id in [first_id, second_id]:
-                save_tailored_resume(db_path, job_id, {
-                    "resume_source": "saved snapshot",
-                    "resume_match_score": 70,
-                    "readiness": "Strong",
-                    "position_as": "Backend engineer",
-                    "rewritten_bullets": ["Built reliable production systems"],
-                    "projects": [],
-                    "keywords_to_inject": [],
-                    "experience_to_emphasize": [],
-                    "gaps_in_fit": [],
-                    "covered_keywords": [],
-                    "missing_keywords": [],
-                })
-
-            result = export_job_resume(db_path, first_id, output_dir)
-            files = [name for name in os.listdir(output_dir) if name.endswith(".docx")]
-
-            self.assertEqual(result["job_id"], first_id)
-            self.assertEqual(len(files), 1)
-            self.assertIn("First_Co", files[0])
-            self.assertNotIn("Second_Co", files[0])
-            self.assertEqual(result["template_name"], ATS_TEMPLATE_NAME)
-            self.assertTrue(result["ats_validation"]["passed"])
-
-            with zipfile.ZipFile(result["path"]) as exported:
-                document = exported.read("word/document.xml").decode("utf-8")
-            plain_text = result["ats_validation"]["plain_text"]
-            self.assertIn("Built reliable production systems", plain_text)
-            self.assertNotIn("<w:tbl", document)
-            self.assertNotIn("<w:drawing", document)
-            self.assertNotIn("<w:txbxContent", document)
+            with self.assertRaisesRegex(FileNotFoundError, "ROLEFIT_CANONICAL_RESUME"):
+                export_job_resume(db_path, first_id, output_dir)
 
     def test_ats_validation_rejects_layout_that_can_hide_reading_order(self):
         with tempfile.TemporaryDirectory() as directory:

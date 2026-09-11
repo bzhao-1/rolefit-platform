@@ -36,8 +36,11 @@ create table if not exists tailored_resumes (
     readiness text,
     position_as text,
     rewritten_bullets text,
+    rewritten_bullet_records text,
     projects text,
     keywords_to_inject text,
+    supported_keywords_to_surface text,
+    gap_keywords text,
     experience_to_emphasize text,
     gaps_in_fit text,
     covered_keywords text,
@@ -94,6 +97,9 @@ def connect(path):
     conn.execute(INTERVIEWS_SCHEMA)
     conn.execute(SCRAPE_RUNS_SCHEMA)
     ensure_column(conn, "tailored_resumes", "projects", "text")
+    ensure_column(conn, "tailored_resumes", "rewritten_bullet_records", "text")
+    ensure_column(conn, "tailored_resumes", "supported_keywords_to_surface", "text")
+    ensure_column(conn, "tailored_resumes", "gap_keywords", "text")
     ensure_column(conn, "jobs", "posted_at", "text")
     ensure_column(conn, "jobs", "source", "text")
     ensure_column(conn, "jobs", "referral_used", "integer default 0")
@@ -193,17 +199,21 @@ def save_tailored_resume(db_path, job_id, tailoring):
     conn.execute(
         """
         insert into tailored_resumes
-        (job_id, resume_source, resume_match_score, readiness, position_as, rewritten_bullets, projects,
-         keywords_to_inject, experience_to_emphasize, gaps_in_fit, covered_keywords, missing_keywords)
-        values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        (job_id, resume_source, resume_match_score, readiness, position_as, rewritten_bullets,
+         rewritten_bullet_records, projects, keywords_to_inject, supported_keywords_to_surface,
+         gap_keywords, experience_to_emphasize, gaps_in_fit, covered_keywords, missing_keywords)
+        values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         on conflict(job_id) do update set
             resume_source = excluded.resume_source,
             resume_match_score = excluded.resume_match_score,
             readiness = excluded.readiness,
             position_as = excluded.position_as,
             rewritten_bullets = excluded.rewritten_bullets,
+            rewritten_bullet_records = excluded.rewritten_bullet_records,
             projects = excluded.projects,
             keywords_to_inject = excluded.keywords_to_inject,
+            supported_keywords_to_surface = excluded.supported_keywords_to_surface,
+            gap_keywords = excluded.gap_keywords,
             experience_to_emphasize = excluded.experience_to_emphasize,
             gaps_in_fit = excluded.gaps_in_fit,
             covered_keywords = excluded.covered_keywords,
@@ -217,8 +227,11 @@ def save_tailored_resume(db_path, job_id, tailoring):
             tailoring.get("readiness"),
             tailoring.get("position_as"),
             json.dumps(tailoring.get("rewritten_bullets") or []),
+            json.dumps(tailoring.get("rewritten_bullet_records") or []),
             json.dumps(tailoring.get("projects") or []),
             json.dumps(tailoring.get("keywords_to_inject") or []),
+            json.dumps(tailoring.get("supported_keywords_to_surface") or []),
+            json.dumps(tailoring.get("gap_keywords") or []),
             json.dumps(tailoring.get("experience_to_emphasize") or []),
             json.dumps(tailoring.get("gaps_in_fit") or []),
             json.dumps(tailoring.get("covered_keywords") or []),
@@ -236,7 +249,7 @@ def get_tailored_resume(db_path, job_id):
     if not row:
         return None
     data = dict(row)
-    for key in ["rewritten_bullets", "projects", "keywords_to_inject", "experience_to_emphasize", "gaps_in_fit", "covered_keywords", "missing_keywords"]:
+    for key in ["rewritten_bullets", "rewritten_bullet_records", "projects", "keywords_to_inject", "supported_keywords_to_surface", "gap_keywords", "experience_to_emphasize", "gaps_in_fit", "covered_keywords", "missing_keywords"]:
         try:
             data[key] = json.loads(data.get(key) or "[]")
         except json.JSONDecodeError:

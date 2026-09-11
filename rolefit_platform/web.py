@@ -436,7 +436,9 @@ class App(BaseHTTPRequestHandler):
                 detail = export_error or "No job or tailoring data was found."
                 self.send_html("<div class='panel'><h1>Resume not exported</h1><p>" + esc(detail) + "</p><p><a class='button' href='/'>Back to jobs</a></p></div>", "Resume not exported", 404)
             else:
-                self.send_html("<div class='panel'><h1>ATS Resume Exported</h1><p>Created one ATS-safe resume for <b>" + esc(result.get("company")) + " · " + esc(result.get("role")) + "</b>.</p><p><span class='verified'>ATS structure check passed</span></p><p><code>" + esc(result.get("path")) + "</code></p><p><a class='button' href='/job?id=" + str(job_id) + "'>Back to job</a> <a class='button ghost' href='/'>Back to jobs</a></p></div>", "ATS Resume Exported")
+                rendered = result["ats_validation"].get("rendered") or {}
+                validation_text = "One page · " + str(rendered.get("one_line_bullets") or 0) + " one-line bullets · hyperlinks preserved"
+                self.send_html("<div class='panel'><h1>ATS Resume Exported</h1><p>Created one job-specific resume for <b>" + esc(result.get("company")) + " · " + esc(result.get("role")) + "</b> by patching the configured canonical DOCX.</p><p><span class='verified'>" + esc(validation_text) + "</span></p><p class='muted'>Open the final copy in Microsoft Word for a quick visual check before submitting.</p><p><code>" + esc(result.get("path")) + "</code></p><p><a class='button' href='/job?id=" + str(job_id) + "'>Back to job</a> <a class='button ghost' href='/'>Back to jobs</a></p></div>", "ATS Resume Exported")
         else:
             self.send_html("<div class='panel'><h1>Not found</h1></div>", status=404)
 
@@ -973,7 +975,7 @@ class App(BaseHTTPRequestHandler):
     def matches_page(self, params):
         resume_path = (params.get("resume") or [DEFAULT_RESUME_PATH])[0]
         limit = int((params.get("limit") or ["8"])[0])
-        resume = load_resume_text(resume_path)
+        resume = load_resume_text(resume_path) if resume_path else None
         rows = top_resume_matches(self.db_path, resume, limit)
         tailored_notice = "<div class='panel'><b>Tailoring complete.</b> Missing tailored resumes were generated from the default resume.</div>" if params.get("tailored") else ""
         cards = []
@@ -997,7 +999,7 @@ class App(BaseHTTPRequestHandler):
   <h1>Resume Matches</h1>
   <p class="muted">Ranks visible jobs by role score plus how well your current resume already covers the job requirements. New jobs are auto-tailored from the default resume.</p>
   <form method="get" action="/matches" class="row">
-    <input name="resume" value=\"""" + esc(resume_path) + """\">
+    <input name="resume" value=\"""" + esc(resume_path or "") + """\" placeholder="Optional DOCX, PDF, or text path">
     <input name="limit" value=\"""" + str(limit) + """\" style="max-width:90px">
     <button>Refresh matches</button>
   </form>
@@ -1104,8 +1106,9 @@ class App(BaseHTTPRequestHandler):
     <h2>Tailored Resume Bullets</h2>
     <ul>""" + "".join("<li>" + esc(item) + "</li>" for item in tailored["rewritten_bullets"]) + """</ul>
     <p><b>Position as:</b> """ + esc(tailored["position_as"]) + """</p>
-    <p><b>Keywords:</b> """ + esc(", ".join(tailored["keywords_to_inject"])) + """</p>
-    <p><b>Emphasize:</b> """ + esc(", ".join(tailored["oracle_work_to_emphasize"])) + """</p>
+    <p><b>Evidence-supported keywords:</b> """ + esc(", ".join(tailored.get("supported_keywords_to_surface") or tailored["keywords_to_inject"])) + """</p>
+    <p><b>Unsupported JD gaps:</b> """ + esc(", ".join(tailored.get("gap_keywords") or [])) + """</p>
+    <p><b>Emphasize:</b> """ + esc(", ".join(tailored.get("experience_to_emphasize") or [])) + """</p>
   </div>
   <div class="panel">
     <h2>Interview Prep</h2>

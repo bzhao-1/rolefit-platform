@@ -1,4 +1,7 @@
 import re
+import os
+import zipfile
+from xml.etree import ElementTree
 
 from rolefit_platform.profile import BASE_RESUME
 from rolefit_platform.resume import tailor_resume
@@ -18,15 +21,25 @@ MATCH_GROUPS = [
 
 def load_resume_text(path=None):
     if not path:
-        return BASE_RESUME
+        raise ValueError("A resume path is required. Set ROLEFIT_CANONICAL_RESUME or pass --resume PATH.")
+    path = os.path.abspath(os.path.expanduser(path))
+    if not os.path.isfile(path):
+        raise FileNotFoundError("Resume not found: " + path + ". Set ROLEFIT_CANONICAL_RESUME or pass --resume PATH.")
     lower = path.lower()
     if lower.endswith(".pdf"):
-        try:
-            from pypdf import PdfReader
-            reader = PdfReader(path)
-            return "\n".join(page.extract_text() or "" for page in reader.pages)
-        except Exception:
-            return BASE_RESUME
+        from pypdf import PdfReader
+        reader = PdfReader(path)
+        return "\n".join(page.extract_text() or "" for page in reader.pages)
+    if lower.endswith(".docx"):
+        with zipfile.ZipFile(path) as docx:
+            root = ElementTree.fromstring(docx.read("word/document.xml"))
+        namespace = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
+        paragraphs = []
+        for node in root.iter(namespace + "p"):
+            text = "".join(item.text or "" for item in node.iter(namespace + "t")).strip()
+            if text:
+                paragraphs.append(text)
+        return "\n".join(paragraphs)
     with open(path, "r", encoding="utf-8") as handle:
         return handle.read()
 

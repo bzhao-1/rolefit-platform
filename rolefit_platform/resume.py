@@ -2,6 +2,21 @@ from rolefit_platform.profile import BASE_RESUME
 from rolefit_platform.text_utils import count_matches
 
 
+ACTION_VERBS = {
+    "Added", "Authored", "Automated", "Built", "Created", "Delivered", "Designed", "Developed",
+    "Engineered", "Established", "Expanded", "Generated", "Implemented", "Integrated",
+    "Improved", "Led", "Mentored", "Migrated", "Operated", "Owned", "Partnered",
+    "Prevented", "Qualified", "Reduced", "Reinforced", "Scaled", "Streamlined",
+    "Supported", "Trained", "Verified",
+}
+
+UNSUPPORTED_KEYWORDS = [
+    "Kubernetes", "REST", "gRPC", "RAG", "TypeScript", "Ray", "VERL", "Slime",
+    "vLLM", "SGLang", "GPU computing", "distributed training", "foundation models",
+    "production ML", "microservices",
+]
+
+
 EXPERIENCE_THEMES = {
     "deployment systems": ["deployment", "release", "ci/cd", "pipeline", "validation", "gate", "canary"],
     "cloud infrastructure": ["cloud", "compute", "infrastructure", "hypervisor", "vm", "fleet", "linux"],
@@ -313,6 +328,43 @@ PROJECT_BANK = [
 ]
 
 
+def _metric_tokens(text):
+    import re
+    return re.findall(r"(?:\d[\d,]*\+|~\d+%|\d+%|x86_64|aarch64|monthly)", text, flags=re.IGNORECASE)
+
+
+for bullet in BULLET_BANK:
+    bullet["evidence_id"] = bullet.get("source_fact") or bullet["id"]
+    bullet["source"] = bullet.get("source_fact") or "sample professional experience evidence"
+    bullet["fact"] = bullet["text"]
+    bullet["approved_metrics"] = _metric_tokens(bullet["text"])
+    bullet["approved_keywords"] = list(dict.fromkeys(bullet.get("terms") or []))
+    bullet["metric_must_preserve"] = bool(bullet["approved_metrics"])
+    bullet["action_verb"] = bullet["text"].split()[0]
+    bullet.setdefault("concise_variants", [])
+
+for project in PROJECT_BANK:
+    project["bullet_records"] = []
+    for index, text in enumerate(project.get("bullets") or []):
+        project["bullet_records"].append({
+            "evidence_id": project["id"] + "_" + str(index + 1),
+            "source": project["name"] + " sample project evidence",
+            "fact": text,
+            "text": text,
+            "action_verb": text.split()[0],
+            "approved_metrics": _metric_tokens(text),
+            "approved_keywords": list(dict.fromkeys(project.get("terms") or [])),
+            "metric_must_preserve": bool(_metric_tokens(text)),
+            "approved_variants": [text],
+        })
+
+_EVIDENCE_TEXT = " ".join(
+    [BASE_RESUME]
+    + [bullet["text"] for bullet in BULLET_BANK]
+    + [record["text"] for project in PROJECT_BANK for record in project["bullet_records"]]
+)
+
+
 def infer_positioning(text):
     platform = len(count_matches(text, ["platform", "infrastructure", "kubernetes", "cloud", "api", "provisioning"]))
     backend = len(count_matches(text, ["backend", "java", "python", "service", "distributed", "api"]))
@@ -378,7 +430,14 @@ def keywords_to_inject(text):
         "human-in-the-loop", "deterministic guardrails", "developer productivity",
         "incident triage",
     ]
-    return count_matches(text, candidates)
+    requested = count_matches(text, candidates)
+    return [keyword for keyword in requested if count_matches(_EVIDENCE_TEXT, [keyword])]
+
+
+def evidence_filtered_keywords(text):
+    supported = keywords_to_inject(text)
+    unsupported = count_matches(text, UNSUPPORTED_KEYWORDS)
+    return {"supported": supported, "unsupported": [term for term in unsupported if term not in supported]}
 
 
 def score_bullet(text, bullet, role=None):
@@ -452,7 +511,7 @@ def tailored_bullet_text(text, bullet, role=None):
     return strengthen_platform_framing(rendered)
 
 
-def tailored_bullets(text, resume_text=None, role=None):
+def tailored_bullet_records(text, resume_text=None, role=None):
     ranked = []
     for bullet in BULLET_BANK:
         score = score_bullet(text, bullet, role)
@@ -489,7 +548,30 @@ def tailored_bullets(text, resume_text=None, role=None):
             break
 
     selected.sort(key=lambda bullet: score_bullet(text, bullet, role), reverse=True)
-    return [tailored_bullet_text(text, bullet, role) for bullet in selected[:5]]
+    focus = primary_focus(text, role)
+    records = []
+    for bullet in selected[:5]:
+        variants = []
+        for value in [(bullet.get("variants") or {}).get(focus), bullet["text"], *(bullet.get("variants") or {}).values(), *(bullet.get("concise_variants") or [])]:
+            if value and value not in variants:
+                variants.append(value)
+        records.append({
+            "bullet_id": bullet["id"],
+            "evidence_id": bullet["evidence_id"],
+            "source": bullet["source"],
+            "fact": bullet["fact"],
+            "text": variants[0],
+            "action_verb": variants[0].split()[0],
+            "approved_metrics": list(bullet["approved_metrics"]),
+            "approved_keywords": list(bullet["approved_keywords"]),
+            "metric_must_preserve": bullet["metric_must_preserve"],
+            "approved_variants": variants,
+        })
+    return records
+
+
+def tailored_bullets(text, resume_text=None, role=None):
+    return [record["text"] for record in tailored_bullet_records(text, resume_text, role)]
 
 
 def tailored_projects(text):
@@ -499,21 +581,20 @@ def tailored_projects(text):
 def tailor_resume(text, resume_text=None, role=None):
     resume = resume_text or BASE_RESUME
     themes = choose_experience_work(text)
-    gaps = []
-    if not count_matches(resume, ["kubernetes", "k8s"]):
-        gaps.append("Kubernetes is not currently prominent in the base resume; only include it if there is hands-on evidence.")
-    if count_matches(text, ["gpu", "cuda", "ai infrastructure", "ml infrastructure"]) and not count_matches(resume, ["gpu", "cuda", "ml infrastructure"]):
-        gaps.append("AI/GPU infrastructure terms appear in the role but are not strongly supported by the sample resume evidence.")
-    if count_matches(text, ["go"]) and "Go" not in resume:
-        gaps.append("Go appears in the role; the sample resume lists Go but needs project or production evidence if emphasized.")
+    keyword_result = evidence_filtered_keywords(text)
+    records = tailored_bullet_records(text, resume, role)
+    gaps = [term + " appears in the role but is not supported by the configured resume evidence." for term in keyword_result["unsupported"]]
     if not gaps:
-        gaps.append("No major gap detected; keep claims grounded in production systems and measurable impact.")
+        gaps.append("No major evidence gap detected; keep claims grounded in approved resume facts.")
 
     return {
         "position_as": infer_positioning(text),
-        "rewritten_bullets": tailored_bullets(text, resume, role),
+        "rewritten_bullets": [record["text"] for record in records],
+        "rewritten_bullet_records": records,
         "projects": tailored_projects(text),
-        "keywords_to_inject": keywords_to_inject(text),
+        "supported_keywords_to_surface": keyword_result["supported"],
+        "gap_keywords": keyword_result["unsupported"],
+        "keywords_to_inject": keyword_result["supported"],
         "experience_to_emphasize": [item[0] for item in themes],
         "gaps_in_fit": gaps,
     }

@@ -9,7 +9,7 @@ from rolefit_platform.maintenance import cleanup_locations
 from rolefit_platform.prep import interview_prep
 from rolefit_platform.outreach import outreach_message
 from rolefit_platform.resume import tailor_resume
-from rolefit_platform.resume_export import DEFAULT_OUTPUT_DIR, export_finished_resumes
+from rolefit_platform.resume_export import DEFAULT_OUTPUT_DIR, export_finished_resumes, export_job_resume
 from rolefit_platform.resume_match import load_resume_text, resume_match, top_resume_matches
 from rolefit_platform.scoring import score_job
 from rolefit_platform.scraper_agent import recent_agent_runs, run_scraper_loop, run_scraper_once
@@ -96,18 +96,18 @@ def command_classify_job(args):
 def command_tailor_resume(args):
     text, job = resolve_text(args)
     resume = load_resume_text(args.resume) if getattr(args, "resume", None) else None
-    print_json(tailor_resume(text, resume))
+    print_json(tailor_resume(text, resume, (job or {}).get("role")))
 
 
 def command_resume_match(args):
     text, job = resolve_text(args)
-    resume = load_resume_text(args.resume)
+    resume = load_resume_text(args.resume) if args.resume else None
     print_json(resume_match(text, resume))
 
 
 def command_tailor_top(args):
     ensure_db_dir(args.db)
-    resume = load_resume_text(args.resume)
+    resume = load_resume_text(args.resume) if args.resume else None
     print_json(top_resume_matches(args.db, resume, args.limit))
 
 
@@ -243,6 +243,14 @@ def command_export_resumes(args):
     print_json(export_finished_resumes(args.db, args.output_dir, args.limit))
 
 
+def command_export_job_resume(args):
+    ensure_db_dir(args.db)
+    result = export_job_resume(args.db, args.job_id, args.output_dir)
+    if not result:
+        raise SystemExit("No job found with id " + str(args.job_id))
+    print_json(result)
+
+
 def command_serve(args):
     ensure_db_dir(args.db)
     serve(args.db, args.host, args.port, not args.no_browser)
@@ -286,7 +294,7 @@ def build_parser():
 
     tailor = sub.add_parser("tailor-resume", help="Generate tailored bullets and keywords")
     add_text_inputs(tailor)
-    tailor.add_argument("--resume", help="Path to current resume PDF or text file")
+    tailor.add_argument("--resume", help="Path to current resume DOCX, PDF, or text file")
     tailor.set_defaults(func=command_tailor_resume)
 
     match = sub.add_parser("resume-match", help="Score how well the current resume matches a job")
@@ -395,6 +403,11 @@ def build_parser():
     export_resumes.add_argument("--output-dir", default=DEFAULT_OUTPUT_DIR)
     export_resumes.add_argument("--limit", type=int, default=25)
     export_resumes.set_defaults(func=command_export_resumes)
+
+    export_resume = sub.add_parser("export-resume", help="Export one job-specific resume from the canonical DOCX")
+    export_resume.add_argument("--job-id", type=int, required=True)
+    export_resume.add_argument("--output-dir", default=DEFAULT_OUTPUT_DIR)
+    export_resume.set_defaults(func=command_export_job_resume)
 
     web = sub.add_parser("serve", help="Launch the local browser UI")
     web.add_argument("--host", default="127.0.0.1")
