@@ -182,6 +182,9 @@ def _replace_projects(root, projects):
 
 def _write_package(template_path, path, root):
     os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
+    # ElementTree omits declarations used only by mc:Ignorable, which makes
+    # Microsoft Word report the otherwise valid package as unreadable.
+    root.attrib.pop("{http://schemas.openxmlformats.org/markup-compatibility/2006}Ignorable", None)
     document = ElementTree.tostring(root, encoding="utf-8", xml_declaration=True)
     with zipfile.ZipFile(template_path) as source, zipfile.ZipFile(path, "w") as target:
         for info in source.infolist():
